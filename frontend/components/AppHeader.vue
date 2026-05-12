@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Images, LogOut, Upload, Users } from 'lucide-vue-next'
+import { Images, ListTodo, LogOut, Upload, Users } from 'lucide-vue-next'
 
 const { currentUser, loadMe, logout } = useAuth()
 
@@ -45,6 +45,14 @@ onMounted(async () => {
         >
           <Users class="h-4 w-4" aria-hidden="true" />
           Users
+        </NuxtLink>
+        <NuxtLink
+          v-if="currentUser?.role === 'admin'"
+          to="/admin/jobs"
+          class="focus-ring inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-stone-700 hover:bg-mist/60"
+        >
+          <ListTodo class="h-4 w-4" aria-hidden="true" />
+          Jobs
         </NuxtLink>
         <button
           v-if="currentUser"

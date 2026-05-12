@@ -43,13 +43,19 @@ backend:
 frontend:
     #!/usr/bin/env bash
     set -euo pipefail
-    docker run --rm --network host \
-      -e KINFRAME_API_PROXY="${KINFRAME_API_PROXY:-http://127.0.0.1:${BACKEND_PORT:-18000}}" \
-      -e FRONTEND_PORT="${FRONTEND_PORT:-3000}" \
-      -v "$PWD/frontend:/app" \
-      -v /app/node_modules \
-      kinframe-frontend-env:stage5 \
-      bash -lc 'pnpm dev --host 0.0.0.0 --port "$FRONTEND_PORT"'
+    scripts/frontend-docker.sh dev
+
+frontend-build:
+    scripts/frontend-docker.sh build
+
+test-frontend:
+    scripts/frontend-docker.sh test
+
+frontend-shell:
+    scripts/frontend-docker.sh shell
+
+check-frontend-permissions:
+    scripts/check-frontend-docker-permissions.sh
 
 create-admin username="admin" display_name="Administrator" password="password123":
     docker run --rm --network host -e APP_ENV="${APP_ENV:-development}" -e APP_SECRET_KEY="${APP_SECRET_KEY:-change-me}" -e DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://kinframe:change-me@localhost:15432/kinframe}" -v "$PWD/backend:/app" -v /app/.venv kinframe-backend-env:stage5 uv run python scripts/create_admin.py --username "{{username}}" --display-name "{{display_name}}" --password "{{password}}"

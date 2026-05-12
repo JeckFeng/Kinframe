@@ -11,7 +11,14 @@ from app.models import Photo, PhotoProcessingJob
 from app.services.exif import ExtractedMetadata, extract_metadata
 from app.services.fallback_slide_design import build_fallback_slide_design
 from app.services.images import generate_preview, generate_thumbnail
-from app.services.photos import PHOTO_STATUS_FAILED, PHOTO_STATUS_PROCESSING, PHOTO_STATUS_READY
+from app.services.photos import (
+    PHOTO_STATUS_DESIGN_GENERATED,
+    PHOTO_STATUS_EXIF_PARSED,
+    PHOTO_STATUS_FAILED,
+    PHOTO_STATUS_PREVIEW_GENERATED,
+    PHOTO_STATUS_PROCESSING,
+    PHOTO_STATUS_READY,
+)
 from app.services.slide_designs import create_slide_design, get_latest_slide_design_version
 from app.services.storage import ObjectStorage
 from app.schemas.photo import SlideDesignCreate
@@ -175,11 +182,23 @@ def process_next_photo_job(
         original_bytes = storage.download_bytes(photo.object_key_original)
         suffix = Path(photo.object_key_original).suffix or ".jpg"
         metadata = extract_metadata(original_bytes, suffix, photo.uploaded_at)
+
+        photo.status = PHOTO_STATUS_EXIF_PARSED
+        photo.updated_at = utc_now()
+        db.add(photo)
+        db.commit()
+
         thumbnail_bytes = generate_thumbnail(original_bytes, max_size=thumbnail_size_px)
         preview_bytes = generate_preview(original_bytes, max_size=preview_max_size_px)
         storage.upload_bytes(photo.object_key_thumbnail, thumbnail_bytes, "image/webp")
         if photo.object_key_preview is not None:
             storage.upload_bytes(photo.object_key_preview, preview_bytes, "image/webp")
+
+        photo.status = PHOTO_STATUS_PREVIEW_GENERATED
+        photo.updated_at = utc_now()
+        db.add(photo)
+        db.commit()
+
         design_json = build_fallback_slide_design(photo, metadata)
         create_slide_design(
             db,
@@ -192,6 +211,11 @@ def process_next_photo_job(
                 validation_errors=None,
             ),
         )
+
+        photo.status = PHOTO_STATUS_DESIGN_GENERATED
+        photo.updated_at = utc_now()
+        db.add(photo)
+        db.commit()
     except Exception as exc:
         mark_job_failed(db, job, photo, str(exc))
         return True

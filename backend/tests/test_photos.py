@@ -218,6 +218,8 @@ def test_upload_photo_stores_objects_and_metadata(client_storage_and_session_fac
         "attempts": 0,
         "max_attempts": 3,
         "error_message": None,
+        "slide_design_status": None,
+        "slide_design_source": None,
     }
 
 

@@ -64,6 +64,30 @@ Package manager: `pnpm@9.15.4`. The Docker image is `kinframe-frontend-env:stage
 - `scripts/` — backup/restore (PostgreSQL pg_dump, MinIO mc mirror, SHA-256 manifests), acceptance test scripts
 - `justfile` — task runner wrapping all Docker and test commands
 
+### Docker: avoiding host permissions pollution from containers
+
+When `frontend/` (or any source tree) is bind-mounted into a container that runs as root (e.g. `docker run -v "$PWD/frontend:/app" ...`), build artifacts written inside `/app` — `.nuxt/`, `.output/`, `.pnpm-store/`, `node_modules/` — are owned by root on the host. The host user (`xian00`) then cannot delete, overwrite, or `chown` them, causing `EACCES: permission denied` and blocking host-side tooling (vitest, nuxt build, etc.).
+
+**Rules to avoid this:**
+
+1. **Run container processes as the host user.** Pass `--user "$(id -u):$(id -g)"` (or the equivalent in docker-compose) so all written files match the host's UID/GID.
+2. **Keep node_modules and build output off the bind mount.** Mount named volumes over directories the container writes to:
+   ```bash
+   docker run --rm \
+     -v "$PWD/frontend:/app" \
+     -v /app/node_modules \
+     -v /app/.nuxt \
+     -v /app/.output \
+     ...
+   ```
+   Named volumes shadow the bind mount at those paths, so `pnpm install` and `nuxt build` write into the volume, not the host tree. The volume is owned by the container user, and the host source tree stays clean.
+3. **Redirect Nuxt build output when needed.** Set `NUXT_BUILD_DIR` and `NITRO_OUTPUT_DIR` to point inside a volume rather than the default `.nuxt` / `.output` in the source tree.
+4. **Clean up stale root-owned artifacts.** If you already have host files owned by root, delete them from *inside* the same container (where you are root), or use a container explicitly for cleanup:
+   ```bash
+   docker run --rm -v "$PWD/frontend:/app" -w /app alpine rm -rf .nuxt .output .pnpm-store
+   ```
+5. **Do not install global packages on the host to work around Docker permission issues.** Prefer fixing the mount/UID setup so Docker commands work correctly from the host. If you must run tools on the host (e.g. vitest), ensure `node_modules` is host-owned by running `pnpm install` on the host as the host user — not inside a root container with a bind mount.
+
 ## Key Conventions
 
 - Photo categories: `life` (生活照), `photography` (摄影照), `pet` (宠物照); legacy `travel` data mapped to photography in showcase

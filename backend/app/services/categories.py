@@ -88,6 +88,32 @@ def ensure_default_categories(db: Session) -> None:
         db.commit()
 
 
+def get_valid_category_slugs(db: Session) -> set[str]:
+    """Return category slugs valid for new photos, from the database.
+
+    Includes both active category slugs and legacy slugs so that old
+    photos (e.g. ``travel``) remain queryable and uploadable during
+    the PRD transition.
+
+    Falls back to the static set when no active categories exist (e.g.
+    during initial migration), so the seed definitions always work.
+    """
+    ensure_default_categories(db)
+    rows = db.execute(
+        select(Category.slug, Category.legacy_slug).where(
+            Category.is_active.is_(True)
+        )
+    ).all()
+    slugs: set[str] = set()
+    for slug, legacy_slug in rows:
+        slugs.add(slug)
+        if legacy_slug:
+            slugs.add(legacy_slug)
+    if not slugs:
+        return set(PHOTO_ACCEPTED_CATEGORY_SLUGS)
+    return slugs
+
+
 def list_active_categories(db: Session) -> list[Category]:
     """Return active categories ordered for showcase navigation."""
 

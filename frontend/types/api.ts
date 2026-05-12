@@ -78,6 +78,8 @@ export interface PhotoProcessingStatusResponse {
   attempts: number | null
   max_attempts: number | null
   error_message: string | null
+  slide_design_status: string | null
+  slide_design_source: string | null
 }
 
 export interface PhotoBatchUploadItem {
@@ -103,4 +105,35 @@ export interface MeResponse {
 
 export interface ApiErrorBody {
   detail?: string
+}
+
+export interface ShowcasePhotoItem {
+  photo: Photo
+  preview_url: string | null
+  slide_design: Record<string, unknown> | null
+}
+
+export interface ShowcaseResponse {
+  categories: PhotoCategoryDefinition[]
+  photos: ShowcasePhotoItem[]
+}
+
+export interface AdminJobItem {
+  id: string
+  photo_id: string
+  job_type: string
+  status: string
+  attempts: number
+  max_attempts: number
+  error_message: string | null
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+  photo_category: string
+  photo_status: string
+  photo_file_size: number | null
+  photo_width: number | null
+  photo_height: number | null
+  photo_taken_at: string | null
+  photo_user_message: string | null
 }

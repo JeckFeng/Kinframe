@@ -22,7 +22,6 @@ from app.schemas.photo import (
     SlideDesignRead,
 )
 from app.services.photos import (
-    PHOTO_CATEGORIES,
     PHOTO_STATUS_PROCESSING,
     can_modify_photo,
     delete_photo,
@@ -32,7 +31,7 @@ from app.services.photos import (
     update_photo,
 )
 from app.services.photo_jobs import PhotoJobCreateError, create_photo_with_processing_job, get_latest_job_for_photo
-from app.services.categories import list_active_categories
+from app.services.categories import get_valid_category_slugs, list_active_categories
 from app.services.images import heic_conversion_available
 from app.services.slide_designs import (
     DuplicateSlideDesignVersionError,
@@ -54,11 +53,17 @@ EXTENSIONS_BY_MIME_TYPE = {
 }
 
 
-def _validate_category(category: str) -> str:
-    if category not in PHOTO_CATEGORIES:
+FALLBACK_CATEGORY = "life"
+
+
+def _validate_category(category: str | None, db: DbSession) -> str:
+    if not category:
+        return FALLBACK_CATEGORY
+    valid_slugs = get_valid_category_slugs(db)
+    if category not in valid_slugs:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Category must be one of: life, photography, pet",
+            detail=f"Category must be one of: {', '.join(sorted(valid_slugs))}",
         )
     return category
 
@@ -194,7 +199,7 @@ async def upload_photo(
     current_user: Annotated[User, Depends(get_current_user)],
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
     file: UploadFile = File(...),
-    category: str = Form(...),
+    category: str | None = Form(default=None),
     user_message: str | None = Form(default=None),
     ai_caption_enabled: bool = Form(default=False),
     ai_category_enabled: bool = Form(default=False),
@@ -202,7 +207,7 @@ async def upload_photo(
 ) -> PhotoRead:
     """Upload a photo original and enqueue asynchronous processing."""
 
-    category = _validate_category(category)
+    category = _validate_category(category, db)
     try:
         return await _upload_one_photo(
             db,
@@ -227,7 +232,7 @@ async def batch_upload_photos(
     current_user: Annotated[User, Depends(get_current_user)],
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
     files: list[UploadFile] = File(...),
-    category: str = Form(...),
+    category: str | None = Form(default=None),
     user_message: str | None = Form(default=None),
     ai_caption_enabled: bool = Form(default=False),
     ai_category_enabled: bool = Form(default=False),
@@ -235,7 +240,7 @@ async def batch_upload_photos(
 ) -> PhotoBatchUploadResponse:
     """Upload up to 10 photos and return independent per-file results."""
 
-    category = _validate_category(category)
+    category = _validate_category(category, db)
     if len(files) > BATCH_UPLOAD_MAX_FILES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -279,7 +284,7 @@ def get_photos(
     """List photos visible to logged-in users."""
 
     if category is not None:
-        category = _validate_category(category)
+        category = _validate_category(category, db)
     return [PhotoRead.model_validate(photo) for photo in list_photos(db, category)]
 
 
@@ -347,6 +352,7 @@ def get_processing_status(
 
     photo = _photo_or_404(db, photo_id)
     job = get_latest_job_for_photo(db, photo_id)
+    design = get_latest_active_slide_design(db, photo_id)
     return PhotoProcessingStatusResponse(
         photo_id=photo.id,
         photo_status=photo.status,
@@ -355,6 +361,8 @@ def get_processing_status(
         attempts=job.attempts if job is not None else None,
         max_attempts=job.max_attempts if job is not None else None,
         error_message=job.error_message if job is not None else None,
+        slide_design_status=design.status if design is not None else None,
+        slide_design_source=design.source if design is not None else None,
     )
 
 

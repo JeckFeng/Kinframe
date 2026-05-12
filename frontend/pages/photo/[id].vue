@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ExternalLink, Save } from 'lucide-vue-next'
+import { ExternalLink, Loader2, Save } from 'lucide-vue-next'
 import type { Photo, PhotoCategory, PhotoProcessingStatusResponse, PresignedUrlResponse } from '~/types/api'
 
 const route = useRoute()
@@ -17,6 +17,21 @@ const saving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 let processingPollTimer: ReturnType<typeof setInterval> | null = null
+
+const STATUS_LABELS: Record<string, string> = {
+  uploaded: '已上传',
+  processing: '正在解析照片信息…',
+  exif_parsed: '已解析拍摄信息',
+  preview_generated: '正在生成预览…',
+  vision_analyzed: 'AI 分析已完成',
+  design_generated: '正在生成幻灯片设计…',
+  ready: '已完成 ✓',
+  failed: '处理失败',
+}
+
+function formatStatus(status: string): string {
+  return STATUS_LABELS[status] || status
+}
 
 function isInProgressStatus(status: string) {
   return !['ready', 'failed'].includes(status)
@@ -168,11 +183,16 @@ onBeforeUnmount(stopProcessingPoll)
             </div>
             <div>
               <dt class="text-stone-500">Status</dt>
-              <dd class="font-medium">{{ processingStatus?.job_status || photo.status }}</dd>
+              <dd class="font-medium">{{ formatStatus(photo.status) }}</dd>
+            </div>
+            <div v-if="processingStatus?.slide_design_status">
+              <dt class="text-stone-500">Slide Design</dt>
+              <dd class="font-medium">{{ processingStatus.slide_design_status }}{{ processingStatus.slide_design_source ? ` (${processingStatus.slide_design_source})` : '' }}</dd>
             </div>
           </dl>
-          <p v-if="isInProgressStatus(photo.status)" class="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600">
-            Processing
+          <p v-if="isInProgressStatus(photo.status)" class="mt-4 flex items-center gap-2 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600">
+            <Loader2 class="h-3 w-3 animate-spin" aria-hidden="true" />
+            {{ formatStatus(photo.status) }}
           </p>
           <p v-if="photo.status === 'failed'" class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {{ processingStatus?.error_message || 'Processing failed' }}

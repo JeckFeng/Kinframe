@@ -1,0 +1,181 @@
+/* KinFrame showcase transition variables & classes */
+:root {
+  --kf-ease-cinematic: cubic-bezier(0.22, 1, 0.36, 1);
+  --kf-ease-exhibition: cubic-bezier(0.16, 1, 0.3, 1);
+  --kf-photo-transition-duration: 680ms;
+  --kf-category-transition-duration: 920ms;
+  --kf-photo-blur: 8px;
+  --kf-category-blur: 12px;
+  --kf-photo-offset: 18px;
+  --kf-category-offset: 24px;
+}
+
+/* ── initial / soft crossfade ── */
+.kf-fade-enter-active,
+.kf-fade-leave-active {
+  transition:
+    opacity 520ms var(--kf-ease-cinematic),
+    filter 520ms var(--kf-ease-cinematic);
+}
+
+.kf-fade-enter-from,
+.kf-fade-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+}
+
+/* ── photo next (→) cinematic drift ── */
+.kf-photo-next-enter-active,
+.kf-photo-next-leave-active,
+.kf-photo-prev-enter-active,
+.kf-photo-prev-leave-active {
+  transition:
+    opacity var(--kf-photo-transition-duration) var(--kf-ease-cinematic),
+    transform calc(var(--kf-photo-transition-duration) + 40ms) var(--kf-ease-cinematic),
+    filter var(--kf-photo-transition-duration) var(--kf-ease-cinematic);
+}
+
+.kf-photo-next-enter-from {
+  opacity: 0;
+  transform: translateX(var(--kf-photo-offset)) scale(1.012);
+  filter: blur(var(--kf-photo-blur));
+}
+
+.kf-photo-next-leave-to {
+  opacity: 0;
+  transform: translateX(calc(var(--kf-photo-offset) * -0.66)) scale(0.992);
+  filter: blur(6px);
+}
+
+.kf-photo-prev-enter-from {
+  opacity: 0;
+  transform: translateX(calc(var(--kf-photo-offset) * -1)) scale(1.012);
+  filter: blur(var(--kf-photo-blur));
+}
+
+.kf-photo-prev-leave-to {
+  opacity: 0;
+  transform: translateX(calc(var(--kf-photo-offset) * 0.66)) scale(0.992);
+  filter: blur(6px);
+}
+
+.kf-photo-next-enter-to,
+.kf-photo-next-leave-from,
+.kf-photo-prev-enter-to,
+.kf-photo-prev-leave-from {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  filter: blur(0);
+}
+
+/* ── category next (↓) atmospheric fade ── */
+.kf-category-next-enter-active,
+.kf-category-next-leave-active,
+.kf-category-prev-enter-active,
+.kf-category-prev-leave-active {
+  transition:
+    opacity var(--kf-category-transition-duration) var(--kf-ease-exhibition),
+    transform calc(var(--kf-category-transition-duration) + 60ms) var(--kf-ease-exhibition),
+    filter calc(var(--kf-category-transition-duration) - 80ms) var(--kf-ease-exhibition);
+}
+
+.kf-category-next-enter-from {
+  opacity: 0;
+  transform: translateY(var(--kf-category-offset)) scale(1.018);
+  filter: blur(var(--kf-category-blur));
+}
+
+.kf-category-next-leave-to {
+  opacity: 0;
+  transform: translateY(calc(var(--kf-category-offset) * -0.75)) scale(0.99);
+  filter: blur(10px);
+}
+
+.kf-category-prev-enter-from {
+  opacity: 0;
+  transform: translateY(calc(var(--kf-category-offset) * -1)) scale(1.018);
+  filter: blur(var(--kf-category-blur));
+}
+
+.kf-category-prev-leave-to {
+  opacity: 0;
+  transform: translateY(calc(var(--kf-category-offset) * 0.75)) scale(0.99);
+  filter: blur(10px);
+}
+
+.kf-category-next-enter-to,
+.kf-category-next-leave-from,
+.kf-category-prev-enter-to,
+.kf-category-prev-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+/* ── bottom info bar caption ── */
+.kf-caption-enter-active {
+  transition:
+    opacity 520ms var(--kf-ease-cinematic) 160ms,
+    transform 560ms var(--kf-ease-cinematic) 160ms;
+}
+
+.kf-caption-leave-active {
+  transition:
+    opacity 280ms var(--kf-ease-cinematic),
+    transform 320ms var(--kf-ease-cinematic);
+}
+
+.kf-caption-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.kf-caption-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* ── prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .kf-photo-next-enter-active,
+  .kf-photo-next-leave-active,
+  .kf-photo-prev-enter-active,
+  .kf-photo-prev-leave-active,
+  .kf-category-next-enter-active,
+  .kf-category-next-leave-active,
+  .kf-category-prev-enter-active,
+  .kf-category-prev-leave-active,
+  .kf-fade-enter-active,
+  .kf-fade-leave-active {
+    transition: opacity 180ms ease-out !important;
+    transform: none !important;
+    filter: none !important;
+  }
+
+  .kf-photo-next-enter-from,
+  .kf-photo-next-leave-to,
+  .kf-photo-prev-enter-from,
+  .kf-photo-prev-leave-to,
+  .kf-category-next-enter-from,
+  .kf-category-next-leave-to,
+  .kf-category-prev-enter-from,
+  .kf-category-prev-leave-to {
+    transform: none !important;
+    filter: none !important;
+  }
+
+  .kf-caption-enter-active,
+  .kf-caption-leave-active {
+    transition: opacity 120ms ease-out !important;
+    transform: none !important;
+  }
+
+  .kf-caption-enter-from,
+  .kf-caption-leave-to {
+    transform: none !important;
+  }
+
+  .kf-timeline-dot {
+    transition: none !important;
+  }
+}

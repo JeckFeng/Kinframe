@@ -7,14 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.slide_design_validator import validate_slide_design_data
 
-PhotoCategory = Literal["life", "travel", "photography", "pet"]
+PhotoCategory = str  # validated dynamically against categories table
 
 
 class PhotoCategoryRead(BaseModel):
     """Default category metadata exposed during the PRD transition."""
 
     id: str
-    slug: Literal["life", "photography", "pet"]
+    slug: str
     name: str
     description: str | None
     legacy_slug: str | None
@@ -88,6 +88,8 @@ class PhotoProcessingStatusResponse(BaseModel):
     attempts: int | None
     max_attempts: int | None
     error_message: str | None
+    slide_design_status: str | None
+    slide_design_source: str | None
 
 
 class PhotoBatchUploadItem(BaseModel):

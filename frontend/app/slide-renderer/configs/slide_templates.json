@@ -1,0 +1,71 @@
+{
+  "version": "v0.1",
+  "templates": [
+    {
+      "id": "cinematic_fullscreen",
+      "name": "Cinematic Fullscreen",
+      "description": "Full-screen cinematic presentation with dark background. Suitable for landscape, travel, and dramatic photos.",
+      "preferredCategories": ["photography", "travel"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape"
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline"],
+      "maxExtraLayers": 6,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#111111",
+        "--kf-text-color": "#f8fafc",
+        "--kf-accent-color": "#d8b26e"
+      }
+    },
+    {
+      "id": "warm_memory",
+      "name": "Warm Memory",
+      "description": "Warm, soft layout for family and life photos with light background.",
+      "preferredCategories": ["life"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape"
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline"],
+      "maxExtraLayers": 6,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#f7f5ef",
+        "--kf-text-color": "#171717",
+        "--kf-accent-color": "#8a9a5b"
+      }
+    },
+    {
+      "id": "minimal_white",
+      "name": "Minimal White",
+      "description": "Clean, minimal white-background layout for pet portraits and detailed subjects.",
+      "preferredCategories": ["pet"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape"
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline"],
+      "maxExtraLayers": 6,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#f7f5ef",
+        "--kf-text-color": "#171717",
+        "--kf-accent-color": "#d8b26e"
+      }
+    }
+  ]
+}

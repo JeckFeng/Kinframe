@@ -1,0 +1,35 @@
+{
+  "version": "v0.1",
+  "coordinateSystem": "normalized_0_1",
+  "primitives": {
+    "shape": {
+      "description": "Filled rectangle used for backgrounds, panels, and decorative elements.",
+      "requiredFields": ["type", "zIndex", "rect"],
+      "optionalFields": ["id", "role", "style"],
+      "styleProperties": ["fill"],
+      "maxCountPerSlide": 8
+    },
+    "image": {
+      "description": "The main photo or a secondary image layer.",
+      "requiredFields": ["type", "source", "zIndex", "rect"],
+      "optionalFields": ["id", "role", "fit"],
+      "styleProperties": ["fit"],
+      "maxCountPerSlide": 1,
+      "supportedFits": ["contain", "cover"]
+    },
+    "text": {
+      "description": "Caption, label, or metadata text layer.",
+      "requiredFields": ["type", "content", "zIndex", "rect"],
+      "optionalFields": ["id", "role", "style"],
+      "styleProperties": ["color", "fontSize"],
+      "maxCountPerSlide": 3
+    },
+    "timeline": {
+      "description": "Bottom timeline bar showing the photo's position in the category sequence.",
+      "requiredFields": ["type", "zIndex", "rect"],
+      "optionalFields": ["id", "role", "label"],
+      "styleProperties": ["color", "fontSize"],
+      "maxCountPerSlide": 1
+    }
+  }
+}

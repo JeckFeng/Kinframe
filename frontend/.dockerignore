@@ -1,4 +1,6 @@
 node_modules
+.pnpm-store
+.docker-build
 .nuxt
 .output
 dist

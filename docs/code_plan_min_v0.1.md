@@ -184,6 +184,7 @@ v0.1 不再继续投入传统相册体验升级，而是完成以下最小闭环
 1. fallback generator 不调用外部 AI。
 2. 不生成任意 HTML、JavaScript。
 3. CSS 第一版只允许白名单 CSS variables。
+4. 绝大部分依赖必须部署在 Docker 环境中:在本项目中，除非明确说明，否则绝大部分前后端工具、第三方依赖、运行环境、数据库、中间件、对象存储、反向代理、隧道服务等，都应优先通过 Docker / Docker Compose 进行安装、部署和运行。你不能随意在宿主机系统中安装项目依赖。
 
 ## 7. 阶段 3：最小 Slide Renderer
 
