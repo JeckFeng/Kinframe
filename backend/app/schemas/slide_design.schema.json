@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kinframe.local/schemas/slide_design.schema.json",
+  "title": "KinFrame v0.1 Slide Design",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["photoId", "templateId", "templateParams", "layers", "styleTokens", "renderPolicy"],
+  "properties": {
+    "photoId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "templateId": {
+      "type": "string",
+      "enum": ["cinematic_fullscreen", "warm_memory", "minimal_white"]
+    },
+    "templateParams": {
+      "type": "object"
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type", "zIndex"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["shape", "image", "text", "timeline"]
+          },
+          "role": { "type": "string" },
+          "source": { "type": "string" },
+          "content": { "type": "string" },
+          "label": { "type": "string" },
+          "fit": { "type": "string" },
+          "zIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "rect": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["x", "y", "width", "height"],
+            "properties": {
+              "x": { "type": "number", "minimum": 0, "maximum": 1 },
+              "y": { "type": "number", "minimum": 0, "maximum": 1 },
+              "width": { "type": "number", "minimum": 0, "maximum": 1 },
+              "height": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "style": {
+            "type": "object"
+          }
+        },
+        "not": {
+          "anyOf": [
+            { "required": ["html"] },
+            { "required": ["script"] }
+          ]
+        }
+      }
+    },
+    "styleTokens": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^--kf-"
+      }
+    },
+    "renderPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["allowHtml", "allowJavaScript"],
+      "properties": {
+        "mode": { "type": "string" },
+        "allowHtml": { "const": false },
+        "allowJavaScript": { "const": false }
+      }
+    }
+  }
+}

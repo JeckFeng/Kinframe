@@ -1,0 +1,24 @@
+{
+  "name": "kinframe-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "test": "echo \"frontend tests are not configured for v0\""
+  },
+  "dependencies": {
+    "@nuxtjs/tailwindcss": "^6.12.2",
+    "lucide-vue-next": "^0.468.0",
+    "nuxt": "^3.15.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

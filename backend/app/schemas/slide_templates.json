@@ -1,0 +1,35 @@
+{
+  "version": "v0.1",
+  "templates": [
+    {
+      "id": "cinematic_fullscreen",
+      "name": "Cinematic Fullscreen",
+      "preferredCategories": ["photography", "travel"],
+      "defaultStyleTokens": {
+        "--kf-background-color": "#111111",
+        "--kf-text-color": "#f8fafc",
+        "--kf-accent-color": "#d8b26e"
+      }
+    },
+    {
+      "id": "warm_memory",
+      "name": "Warm Memory",
+      "preferredCategories": ["life"],
+      "defaultStyleTokens": {
+        "--kf-background-color": "#f7f5ef",
+        "--kf-text-color": "#171717",
+        "--kf-accent-color": "#8a9a5b"
+      }
+    },
+    {
+      "id": "minimal_white",
+      "name": "Minimal White",
+      "preferredCategories": ["pet"],
+      "defaultStyleTokens": {
+        "--kf-background-color": "#f7f5ef",
+        "--kf-text-color": "#171717",
+        "--kf-accent-color": "#d8b26e"
+      }
+    }
+  ]
+}

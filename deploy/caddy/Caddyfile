@@ -1,0 +1,3 @@
+:80 {
+    respond "KinFrame v0 infrastructure is running"
+}
