@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import type { ImageLayer } from '../types'
 
-defineProps<{
+const props = defineProps<{
   layer: ImageLayer
   previewUrl: string
+  thumbnailUrl?: string
 }>()
+
+const imageUrl = computed(() => {
+  if (props.layer.source === 'thumbnail' && props.thumbnailUrl) {
+    return props.thumbnailUrl
+  }
+  return props.previewUrl
+})
 </script>
 
 <template>
@@ -20,7 +28,7 @@ defineProps<{
     }"
   >
     <img
-      :src="previewUrl"
+      :src="imageUrl"
       alt=""
       class="kf-image"
       :style="{ objectFit: layer.fit || 'contain' }"

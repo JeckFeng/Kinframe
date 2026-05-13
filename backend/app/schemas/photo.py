@@ -24,12 +24,14 @@ class PhotoCategoryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PhotoRead(BaseModel):
-    """Photo metadata returned by the API."""
+class PhotoPublicRead(BaseModel):
+    """Photo metadata returned to regular users (no sensitive diagnostics)."""
 
     id: str
     owner_id: str
     category: PhotoCategory
+    category_source: str
+    caption_source: str = "none"
     user_message: str | None
     ai_caption: str | None
     final_caption: str | None
@@ -53,7 +55,15 @@ class PhotoRead(BaseModel):
     gps_lng: float | None
     camera_make: str | None
     camera_model: str | None
-    exif_json: dict | None
+    location_name: str | None = None
+    location_country: str | None = None
+    location_region: str | None = None
+    location_city: str | None = None
+    location_district: str | None = None
+    location_road: str | None = None
+    geocoding_status: str = "not_applicable"
+    geocoding_provider: str | None = None
+    geocoded_at: datetime | None = None
     status: str
     processing_message: str | None = None
     created_at: datetime
@@ -62,14 +72,82 @@ class PhotoRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PhotoAdminRead(BaseModel):
+    """Full photo metadata for admin diagnostics (includes AI raw output, EXIF, errors)."""
+
+    id: str
+    owner_id: str
+    category: PhotoCategory
+    category_source: str
+    caption_source: str = "none"
+    user_message: str | None
+    ai_caption: str | None
+    final_caption: str | None
+    ai_category_suggestion: str | None
+    ai_analysis_json: dict | None = None
+    ai_caption_enabled: bool
+    ai_category_enabled: bool
+    include_in_showcase: bool
+    time_source: str
+    bucket: str
+    object_key_original: str
+    object_key_thumbnail: str
+    object_key_preview: str | None
+    mime_type: str
+    file_size: int
+    sha256: str
+    width: int | None
+    height: int | None
+    taken_at: datetime
+    uploaded_at: datetime
+    gps_lat: float | None
+    gps_lng: float | None
+    camera_make: str | None
+    camera_model: str | None
+    exif_json: dict | None
+    location_name: str | None = None
+    location_country: str | None = None
+    location_region: str | None = None
+    location_city: str | None = None
+    location_district: str | None = None
+    location_road: str | None = None
+    geocoding_status: str = "not_applicable"
+    geocoding_provider: str | None = None
+    geocoding_error: str | None = None
+    geocoded_at: datetime | None = None
+    status: str
+    processing_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Backward-compatible alias: existing endpoints use PhotoRead
+PhotoRead = PhotoPublicRead
+
+
 class PhotoUpdate(BaseModel):
-    """Editable photo fields."""
+    """Editable photo fields for regular users."""
 
     category: PhotoCategory | None = None
     user_message: str | None = Field(default=None, max_length=2000)
     ai_caption_enabled: bool | None = None
     ai_category_enabled: bool | None = None
     include_in_showcase: bool | None = None
+
+
+class AdminPhotoUpdate(BaseModel):
+    """Editable photo fields for admins (includes location, final_caption)."""
+
+    category: PhotoCategory | None = None
+    final_caption: str | None = Field(default=None, max_length=2000)
+    location_name: str | None = None
+    location_country: str | None = None
+    location_region: str | None = None
+    location_city: str | None = None
+    location_district: str | None = None
+    location_road: str | None = None
 
 
 class PresignedUrlResponse(BaseModel):
@@ -90,6 +168,9 @@ class PhotoProcessingStatusResponse(BaseModel):
     error_message: str | None
     slide_design_status: str | None
     slide_design_source: str | None
+    ai_provider: str | None = None
+    ai_model: str | None = None
+    geocoding_status: str | None = None
 
 
 class PhotoBatchUploadItem(BaseModel):

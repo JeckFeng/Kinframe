@@ -20,7 +20,10 @@ const errorMessage = ref('')
 const categoryVisible = ref(false)
 const transitionDirection = ref<TransitionDirection>('initial')
 const transitionLocked = ref(false)
+const positionMemory = ref<Partial<Record<ShowcaseCategory, number>>>({})
 let hideTimer: ReturnType<typeof setTimeout> | null = null
+let wheelAccumulator = 0
+let wheelTimer: ReturnType<typeof setTimeout> | null = null
 
 const orderedCategories = computed(() => {
   const items = categories.value
@@ -46,6 +49,10 @@ const currentDesign = computed<SlideDesign | null>(() => {
   return currentItem.value.slide_design as unknown as SlideDesign
 })
 const currentPreviewUrl = computed(() => currentItem.value?.preview_url || '')
+const currentTimeText = computed(() => {
+  if (!currentItem.value?.photo.taken_at) return ''
+  return formatDate(currentItem.value.photo.taken_at)
+})
 const activeCategoryMeta = computed(() =>
   categories.value.find(c => c.slug === activeCategory.value) || null,
 )
@@ -57,6 +64,18 @@ const categoryCounts = computed(() => Object.fromEntries(
 ))
 
 const slideKey = computed(() => `${activeCategory.value}-${activeIndex.value}`)
+
+const locationSummary = computed(() => {
+  const p = currentItem.value?.photo
+  if (!p) return ''
+  const parts = [p.location_city, p.location_region, p.location_country].filter(Boolean)
+  return parts.join(', ')
+})
+
+function isInteractiveElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return target.closest('button, a, input, textarea, [role="menuitem"], aside') !== null
+}
 
 const transitionName = computed(() => {
   switch (transitionDirection.value) {
@@ -116,9 +135,12 @@ async function loadShowcase(category: ShowcaseCategory) {
 }
 
 async function switchCategory(category: ShowcaseCategory) {
+  positionMemory.value[activeCategory.value] = activeIndex.value
   const data = await apiFetch<ShowcaseResponse>(`/showcase?category=${category}`)
   activeCategory.value = category
-  activeIndex.value = 0
+  const saved = positionMemory.value[category]
+  const idx = saved ?? 0
+  activeIndex.value = idx < data.photos.length ? idx : 0
   showcasePhotos.value = data.photos
   categories.value = data.categories
   preloadAdjacent()
@@ -171,6 +193,34 @@ function onKeydown(event: KeyboardEvent) {
   else if (event.key.toLowerCase() === 'c') { event.preventDefault(); toggleCategories() }
 }
 
+function onMouseClick(event: MouseEvent) {
+  if (isInteractiveElement(event.target)) return
+  if (!activePhotos.value.length || transitionLocked.value) return
+  event.preventDefault()
+  previousPhoto()
+}
+
+function onContextMenu(event: MouseEvent) {
+  if (isInteractiveElement(event.target)) return
+  if (!activePhotos.value.length || transitionLocked.value) return
+  event.preventDefault()
+  nextPhoto()
+}
+
+function onWheel(event: WheelEvent) {
+  if (isInteractiveElement(event.target)) return
+  if (transitionLocked.value) return
+  event.preventDefault()
+  wheelAccumulator += event.deltaY
+  if (wheelTimer !== null) clearTimeout(wheelTimer)
+  wheelTimer = setTimeout(() => {
+    if (transitionLocked.value) { wheelAccumulator = 0; return }
+    if (wheelAccumulator > 40) moveCategory(1)
+    else if (wheelAccumulator < -40) moveCategory(-1)
+    wheelAccumulator = 0
+  }, 400)
+}
+
 if (!currentUser.value) { await loadMe() }
 if (!currentUser.value) {
   await navigateTo('/login')
@@ -178,10 +228,19 @@ if (!currentUser.value) {
   await loadShowcase(activeCategory.value)
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('click', onMouseClick)
+  window.addEventListener('contextmenu', onContextMenu)
+  window.addEventListener('wheel', onWheel, { passive: false })
+})
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('click', onMouseClick)
+  window.removeEventListener('contextmenu', onContextMenu)
+  window.removeEventListener('wheel', onWheel)
   if (hideTimer) clearTimeout(hideTimer)
+  if (wheelTimer) clearTimeout(wheelTimer)
 })
 </script>
 
@@ -323,6 +382,8 @@ onBeforeUnmount(() => {
             :preview-url="currentPreviewUrl"
             :photo-index="activeIndex"
             :photo-count="activePhotos.length"
+            :time-text="currentTimeText"
+            :location-text="locationSummary"
           />
         </Transition>
       </div>
@@ -343,6 +404,7 @@ onBeforeUnmount(() => {
           <Transition name="kf-caption" mode="out-in">
             <p v-if="currentItem" :key="slideKey" class="mt-1 max-w-xl text-sm text-white/70">
               {{ currentItem.photo.final_caption || currentItem.photo.user_message || formatDate(currentItem.photo.taken_at) }}
+              <span v-if="locationSummary" class="text-white/50"> · {{ locationSummary }}</span>
             </p>
           </Transition>
         </div>

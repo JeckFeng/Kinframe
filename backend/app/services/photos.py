@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Photo, User
-from app.schemas.photo import PhotoUpdate
+from app.schemas.photo import AdminPhotoUpdate, PhotoUpdate
 from app.services.categories import PHOTO_ACCEPTED_CATEGORY_SLUGS, photo_category_filter_values
 
 PHOTO_CATEGORIES = PHOTO_ACCEPTED_CATEGORY_SLUGS
@@ -82,6 +82,23 @@ def can_modify_photo(user: User, photo: Photo) -> bool:
     return user.role == "admin" or photo.owner_id == user.id
 
 
+def compute_final_caption(photo: Photo) -> tuple[str | None, str]:
+    """Compute final_caption and caption_source from photo fields.
+
+    Priority: manual admin override > user_message > ai_caption > None.
+    Returns (final_caption, caption_source).
+    """
+    # Admin manual override takes absolute priority
+    if photo.caption_source == "admin" and photo.final_caption is not None:
+        return photo.final_caption, "admin"
+
+    if photo.user_message:
+        return photo.user_message, "user"
+    if photo.ai_caption and photo.ai_caption_enabled:
+        return photo.ai_caption, "ai"
+    return None, "none"
+
+
 def update_photo(db: Session, photo: Photo, payload: PhotoUpdate) -> Photo:
     """Apply user-editable fields to a photo."""
 
@@ -90,9 +107,17 @@ def update_photo(db: Session, photo: Photo, payload: PhotoUpdate) -> Photo:
         photo.category = data["category"]
     if "user_message" in data:
         photo.user_message = data["user_message"]
-        photo.final_caption = data["user_message"]
+        # Only recompute final_caption if admin hasn't manually overridden
+        if photo.caption_source != "admin":
+            final, source = compute_final_caption(photo)
+            photo.final_caption = final
+            photo.caption_source = source
     if "ai_caption_enabled" in data and data["ai_caption_enabled"] is not None:
         photo.ai_caption_enabled = data["ai_caption_enabled"]
+        if photo.caption_source != "admin":
+            final, source = compute_final_caption(photo)
+            photo.final_caption = final
+            photo.caption_source = source
     if "ai_category_enabled" in data and data["ai_category_enabled"] is not None:
         photo.ai_category_enabled = data["ai_category_enabled"]
     if "include_in_showcase" in data and data["include_in_showcase"] is not None:
@@ -102,6 +127,96 @@ def update_photo(db: Session, photo: Photo, payload: PhotoUpdate) -> Photo:
     db.commit()
     db.refresh(photo)
     return photo
+
+
+def update_photo_admin(
+    db: Session,
+    photo: Photo,
+    payload: AdminPhotoUpdate,
+    *,
+    admin_user: User,
+) -> dict:
+    """Apply admin-editable fields and return changed_fields for audit logging."""
+
+    data = payload.model_dump(exclude_unset=True)
+    changed_fields: list[str] = []
+    before: dict = {}
+    after: dict = {}
+
+    # Category change — auto-set category_source
+    if "category" in data and data["category"] is not None and data["category"] != photo.category:
+        changed_fields.append("category")
+        changed_fields.append("category_source")
+        before["category"] = photo.category
+        before["category_source"] = photo.category_source
+        photo.category = data["category"]
+        photo.category_source = f"admin:{admin_user.username}"
+        after["category"] = photo.category
+        after["category_source"] = photo.category_source
+
+    # final_caption manual override
+    if "final_caption" in data:
+        old_caption = photo.final_caption
+        old_source = photo.caption_source
+        new_caption = data["final_caption"]
+        if new_caption != old_caption or photo.caption_source != "admin":
+            changed_fields.append("final_caption")
+            changed_fields.append("caption_source")
+            before["final_caption"] = old_caption
+            before["caption_source"] = old_source
+            photo.final_caption = new_caption
+            photo.caption_source = "admin" if new_caption is not None else "none"
+            after["final_caption"] = photo.final_caption
+            after["caption_source"] = photo.caption_source
+
+    # Location fields
+    for loc_field in (
+        "location_name", "location_country", "location_region",
+        "location_city", "location_district", "location_road",
+    ):
+        if loc_field in data and data[loc_field] is not None:
+            old_val = getattr(photo, loc_field)
+            new_val = data[loc_field]
+            if new_val != old_val:
+                changed_fields.append(loc_field)
+                before[loc_field] = old_val
+                after[loc_field] = new_val
+                setattr(photo, loc_field, new_val)
+
+    if changed_fields:
+        photo.updated_at = utc_now()
+        db.add(photo)
+        db.commit()
+        db.refresh(photo)
+        return {
+            "changed_fields": changed_fields,
+            "before": before,
+            "after": after,
+        }
+
+    return {"changed_fields": [], "before": {}, "after": {}}
+
+
+def reset_photo_caption(db: Session, photo: Photo) -> dict:
+    """Clear admin caption override and recompute from user_message / ai_caption."""
+
+    old_caption = photo.final_caption
+    old_source = photo.caption_source
+
+    photo.caption_source = "none"
+    final, source = compute_final_caption(photo)
+    photo.final_caption = final
+    photo.caption_source = source
+    photo.updated_at = utc_now()
+    db.add(photo)
+    db.commit()
+    db.refresh(photo)
+
+    return {
+        "changed_fields": ["final_caption", "caption_source"],
+        "before": {"final_caption": old_caption, "caption_source": old_source},
+        "after": {"final_caption": photo.final_caption, "caption_source": photo.caption_source},
+    }
 
 
 def delete_photo(db: Session, photo: Photo) -> None:

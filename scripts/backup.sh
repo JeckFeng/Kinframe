@@ -78,6 +78,8 @@ manifest = {
         "user_count": int(postgres_counts.get("POSTGRES_USER_COUNT", "0")),
         "photo_count": int(postgres_counts.get("POSTGRES_PHOTO_COUNT", "0")),
         "slide_design_count": int(postgres_counts.get("POSTGRES_SLIDE_DESIGN_COUNT", "0")),
+        "category_count": int(postgres_counts.get("POSTGRES_CATEGORY_COUNT", "0")),
+        "audit_log_count": int(postgres_counts.get("POSTGRES_AUDIT_LOG_COUNT", "0")),
     },
     "minio": {
         "bucket": minio_counts.get("MINIO_BUCKET"),

@@ -7,6 +7,9 @@ const props = withDefaults(
   defineProps<{
     designJson: SlideDesign | null
     previewUrl: string
+    thumbnailUrl?: string
+    timeText?: string
+    locationText?: string
     photoIndex?: number
     photoCount?: number
   }>(),
@@ -60,8 +63,11 @@ const sortedLayers = computed(() => {
       :key="layer.id || `${layer.type}-${layer.zIndex}`"
       :layer="layer"
       :preview-url="previewUrl"
+      :thumbnail-url="thumbnailUrl"
       :photo-index="photoIndex"
       :photo-count="photoCount"
+      :time-text="timeText"
+      :location-text="locationText"
     />
   </section>
   <section v-else class="kf-slide kf-slide--fallback">

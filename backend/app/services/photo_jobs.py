@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import Photo, PhotoProcessingJob
 from app.services.exif import ExtractedMetadata, extract_metadata
 from app.services.fallback_slide_design import build_fallback_slide_design
+from app.services.geocoding import GeocodingResult, GeocodingService
 from app.services.images import generate_preview, generate_thumbnail
 from app.services.photos import (
     PHOTO_STATUS_DESIGN_GENERATED,
@@ -25,6 +26,8 @@ from app.schemas.photo import SlideDesignCreate
 
 PHOTO_JOB_TYPE_PHOTO_INGEST = "photo_ingest"
 PHOTO_JOB_TYPE_SLIDE_DESIGN_GENERATE = "slide_design_generate"
+PHOTO_JOB_TYPE_REVERSE_GEOCODE = "reverse_geocode"
+PHOTO_JOB_TYPE_VISION_ANALYZE = "vision_analyze"
 PHOTO_JOB_TYPE_METADATA_THUMBNAIL = PHOTO_JOB_TYPE_PHOTO_INGEST
 PHOTO_JOB_STATUS_PENDING = "pending"
 PHOTO_JOB_STATUS_RUNNING = "running"
@@ -162,12 +165,406 @@ def mark_job_failed(
     db.commit()
 
 
+def mark_geocode_job_succeeded(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo,
+    result: GeocodingResult,
+    provider_name: str,
+) -> None:
+    """Write location fields and mark geocoding done. Photo status unchanged."""
+
+    now = utc_now()
+    photo.location_name = result.name
+    photo.location_country = result.country
+    photo.location_region = result.region
+    photo.location_city = result.city
+    photo.location_district = result.district
+    photo.location_road = result.road
+    photo.geocoding_status = "succeeded"
+    photo.geocoding_provider = provider_name
+    photo.geocoding_error = None
+    photo.geocoded_at = now
+    photo.updated_at = now
+    job.status = PHOTO_JOB_STATUS_SUCCEEDED
+    job.error_message = None
+    job.finished_at = now
+    job.updated_at = now
+    db.add(photo)
+    db.add(job)
+    db.commit()
+
+
+def mark_geocode_job_failed(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo | None,
+    error_message: str,
+) -> None:
+    """Record geocoding failure. Photo status UNCHANGED (stays ready)."""
+
+    now = utc_now()
+    if job.attempts >= job.max_attempts:
+        job.status = PHOTO_JOB_STATUS_FAILED
+        job.finished_at = now
+        if photo is not None:
+            photo.geocoding_status = "failed"
+            photo.geocoding_error = error_message[:2000]
+            photo.updated_at = now
+            db.add(photo)
+    else:
+        job.status = PHOTO_JOB_STATUS_PENDING
+        job.finished_at = None
+    job.error_message = error_message[:2000]
+    job.updated_at = now
+    db.add(job)
+    db.commit()
+
+
+def create_reverse_geocode_job(
+    db: Session,
+    photo_id: str,
+    *,
+    max_attempts: int,
+    provider_name: str,
+) -> PhotoProcessingJob:
+    """Enqueue a reverse-geocoding follow-on job after a successful ingest."""
+
+    job = PhotoProcessingJob(
+        photo_id=photo_id,
+        job_type=PHOTO_JOB_TYPE_REVERSE_GEOCODE,
+        status=PHOTO_JOB_STATUS_PENDING,
+        attempts=0,
+        max_attempts=max_attempts,
+    )
+    photo = db.get(Photo, photo_id)
+    if photo is not None:
+        photo.geocoding_status = "pending"
+        photo.geocoding_provider = provider_name
+        photo.updated_at = utc_now()
+        db.add(photo)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def _has_pending_or_running_job(db: Session, photo_id: str, job_type: str) -> PhotoProcessingJob | None:
+    """Return an existing pending/running job of the given type, or None."""
+    return db.scalar(
+        select(PhotoProcessingJob)
+        .where(
+            PhotoProcessingJob.photo_id == photo_id,
+            PhotoProcessingJob.job_type == job_type,
+            PhotoProcessingJob.status.in_([PHOTO_JOB_STATUS_PENDING, PHOTO_JOB_STATUS_RUNNING]),
+        )
+    )
+
+
+def create_next_job(
+    db: Session,
+    photo_id: str,
+    *,
+    job_type: str,
+    max_attempts: int,
+    **kwargs: str,
+) -> PhotoProcessingJob:
+    """Enqueue a follow-on job with duplicate protection. Returns existing if found."""
+    existing = _has_pending_or_running_job(db, photo_id, job_type)
+    if existing is not None:
+        return existing
+    job = PhotoProcessingJob(
+        photo_id=photo_id,
+        job_type=job_type,
+        status=PHOTO_JOB_STATUS_PENDING,
+        attempts=0,
+        max_attempts=max_attempts,
+        ai_provider=kwargs.get("provider_name"),
+        ai_model=kwargs.get("model"),
+        ai_prompt_version=kwargs.get("prompt_version"),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def create_vision_analyze_job(
+    db: Session,
+    photo_id: str,
+    *,
+    max_attempts: int,
+) -> PhotoProcessingJob:
+    """Enqueue a vision_analyze job (with dedup)."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return create_next_job(
+        db,
+        photo_id,
+        job_type=PHOTO_JOB_TYPE_VISION_ANALYZE,
+        max_attempts=max_attempts,
+        provider_name="ollama",
+        model=settings.ollama_vision_model or "",
+    )
+
+
+def create_slide_design_generate_job(
+    db: Session,
+    photo_id: str,
+    *,
+    max_attempts: int,
+    provider_name: str,
+) -> PhotoProcessingJob:
+    """Enqueue a slide_design_generate job (with dedup)."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return create_next_job(
+        db,
+        photo_id,
+        job_type=PHOTO_JOB_TYPE_SLIDE_DESIGN_GENERATE,
+        max_attempts=max_attempts,
+        provider_name=provider_name,
+        model=settings.deepseek_model or "",
+        prompt_version="slide_design.v1",
+    )
+
+
+def process_vision_analyze_job(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo,
+    storage: ObjectStorage,
+    *,
+    _provider: object = None,
+) -> bool:
+    """Run vision analysis via Ollama for a ready photo."""
+    if not photo.object_key_preview:
+        from app.services.ai.ollama_provider import VisionAnalysisResult
+        _mark_ai_job_failed(db, job, photo, "No preview available for vision analysis")
+        return True
+
+    try:
+        if _provider is not None and hasattr(_provider, "analyze"):
+            result = _provider.analyze(storage.download_bytes(photo.object_key_preview))
+        else:
+            from app.services.ai.ollama_provider import analyze_preview
+            result = analyze_preview(storage, photo.object_key_preview, enabled=True)
+    except Exception as exc:
+        _mark_ai_job_failed(db, job, photo, str(exc))
+        return True
+
+    if result is None:
+        _mark_ai_job_failed(db, job, photo, "Vision analysis returned no result")
+        return True
+
+    _mark_vision_job_succeeded(db, job, photo, result)
+    return True
+
+
+def _mark_vision_job_succeeded(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo,
+    result: object,
+) -> None:
+    """Write ai_analysis_json and mark vision job succeeded. Photo status unchanged."""
+    from app.services.ai.ollama_provider import VisionAnalysisResult
+
+    now = utc_now()
+    if isinstance(result, VisionAnalysisResult):
+        from dataclasses import asdict
+        photo.ai_analysis_json = asdict(result)
+    else:
+        photo.ai_analysis_json = result  # type: ignore[assignment]
+    photo.updated_at = now
+    job.status = PHOTO_JOB_STATUS_SUCCEEDED
+    job.error_message = None
+    job.finished_at = now
+    job.updated_at = now
+    db.add(photo)
+    db.add(job)
+    db.commit()
+
+
+def _mark_ai_job_failed(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo | None,
+    error_message: str,
+) -> None:
+    """Record AI job failure. Photo status UNCHANGED."""
+    now = utc_now()
+    if job.attempts >= job.max_attempts:
+        job.status = PHOTO_JOB_STATUS_FAILED
+        job.finished_at = now
+    else:
+        job.status = PHOTO_JOB_STATUS_PENDING
+        job.finished_at = None
+    job.error_message = error_message[:2000]
+    job.updated_at = now
+    if photo is not None:
+        photo.updated_at = now
+        db.add(photo)
+    db.add(job)
+    db.commit()
+
+
+def process_slide_design_generate_job(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo,
+    *,
+    _provider: object = None,
+) -> bool:
+    """Generate a slide design via DeepSeek, validate it, and atomically replace active."""
+    from app.services.ai.slide_design_prompt import build_slide_design_prompt
+    from app.services.slide_designs import (
+        SLIDE_DESIGN_STATUS_ACTIVE,
+        get_latest_active_slide_design,
+        get_latest_slide_design_version,
+    )
+
+    # Manual protection: don't overwrite manual active designs
+    active_design = get_latest_active_slide_design(db, photo.id)
+    if active_design is not None and active_design.source == "manual":
+        _mark_ai_job_failed(db, job, photo, "Active design is manual — AI cannot overwrite")
+        return True
+
+    # Build context
+    from app.services.ai.ollama_provider import VisionAnalysisResult
+
+    vision_result: VisionAnalysisResult | None = None
+    if photo.ai_analysis_json:
+        try:
+            vision_result = VisionAnalysisResult(**photo.ai_analysis_json)
+        except Exception:
+            pass
+
+    prev_errors: list[str] | None = None
+    if job.error_message and job.attempts > 1:
+        prev_errors = [job.error_message]
+
+    location_parts = [
+        photo.location_name,
+        photo.location_city,
+        photo.location_region,
+        photo.location_country,
+    ]
+    location_summary = ", ".join(p for p in location_parts if p) or None
+
+    prompt = build_slide_design_prompt(
+        photo_id=photo.id,
+        photo_category=photo.category,
+        user_message=photo.user_message,
+        taken_at_str=photo.taken_at.isoformat() if photo.taken_at else "",
+        location_summary=location_summary,
+        vision_result=vision_result,
+        prev_errors=prev_errors,
+    )
+
+    # Call DeepSeek
+    try:
+        if _provider is not None and hasattr(_provider, "generate"):
+            design_json = _provider.generate(prompt)
+        else:
+            from app.services.ai.deepseek_provider import generate_slide_design_from_context
+            design_json = generate_slide_design_from_context(prompt)
+    except Exception as exc:
+        _mark_ai_job_failed(db, job, photo, str(exc))
+        # On final failure, enqueue retry with error context
+        if job.attempts < job.max_attempts:
+            pass  # Will be retried by claim_next_pending_job
+        return True
+
+    if design_json is None:
+        _mark_ai_job_failed(db, job, photo, "DeepSeek returned no valid response")
+        return True
+
+    # Validate
+    from app.schemas.slide_design_validator import validate_slide_design_data
+
+    try:
+        validated = validate_slide_design_data(design_json, photo_id=photo.id)
+    except ValueError as exc:
+        # One retry with error feedback
+        if job.attempts < job.max_attempts:
+            _mark_ai_job_failed(db, job, photo, str(exc))
+            # Allow retry — error message stored for prompt correction
+        else:
+            _mark_ai_job_failed(db, job, photo, str(exc))
+        return True
+
+    # Atomic swap: deactivate old active, create new AI active
+    now = utc_now()
+    if active_design is not None and active_design.status == SLIDE_DESIGN_STATUS_ACTIVE:
+        active_design.status = "draft"
+        active_design.updated_at = now
+        db.add(active_design)
+
+    version = get_latest_slide_design_version(db, photo.id) + 1
+    from app.schemas.photo import SlideDesignCreate
+    from app.services.slide_designs import create_slide_design
+    create_slide_design(
+        db,
+        photo.id,
+        SlideDesignCreate(
+            version=version,
+            design_json=validated,
+            source="ai",
+            status="active",
+            validation_errors=None,
+        ),
+    )
+
+    photo.updated_at = now
+    job.status = PHOTO_JOB_STATUS_SUCCEEDED
+    job.error_message = None
+    job.finished_at = now
+    job.updated_at = now
+    db.add(photo)
+    db.add(job)
+    db.commit()
+    return True
+
+
+def process_reverse_geocode_job(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo,
+    geocoding: GeocodingService,
+) -> bool:
+    """Attempt reverse geocoding for a photo with GPS coordinates."""
+
+    if not geocoding.enabled:
+        mark_geocode_job_failed(db, job, photo, "Geocoding is disabled")
+        return True
+    if photo.gps_lat is None or photo.gps_lng is None:
+        mark_geocode_job_failed(db, job, photo, "No GPS coordinates available")
+        return True
+    try:
+        result = geocoding.reverse_geocode(photo.gps_lat, photo.gps_lng)
+    except Exception as exc:
+        mark_geocode_job_failed(db, job, photo, str(exc))
+        return True
+    if result is None:
+        mark_geocode_job_failed(db, job, photo, "No geocoding results returned")
+    else:
+        mark_geocode_job_succeeded(db, job, photo, result, geocoding.provider_name)
+    return True
+
+
 def process_next_photo_job(
     db: Session,
     storage: ObjectStorage,
     *,
     thumbnail_size_px: int = 512,
     preview_max_size_px: int = 2048,
+    geocoding: GeocodingService | None = None,
+    geocoding_max_attempts: int = 2,
+    ai_enabled: bool = False,
+    ai_max_attempts: int = 2,
 ) -> bool:
     """Process one pending photo job if one is available."""
 
@@ -176,6 +573,40 @@ def process_next_photo_job(
         return False
 
     photo = db.get(Photo, job.photo_id)
+
+    # ── Job-type dispatch ────────────────────────────────────────
+    if job.job_type == PHOTO_JOB_TYPE_REVERSE_GEOCODE:
+        if photo is None:
+            mark_geocode_job_failed(db, job, None, "Photo not found")
+            return True
+        if geocoding is None:
+            mark_geocode_job_failed(db, job, photo, "Geocoding service not available")
+            return True
+        return process_reverse_geocode_job(db, job, photo, geocoding)
+
+    if job.job_type == PHOTO_JOB_TYPE_VISION_ANALYZE:
+        if photo is None:
+            _mark_ai_job_failed(db, job, None, "Photo not found")
+            return True
+        result = process_vision_analyze_job(db, job, photo, storage)
+        # Enqueue slide_design_generate after vision completes
+        if ai_enabled:
+            from app.core.config import get_settings
+            settings = get_settings()
+            create_slide_design_generate_job(
+                db,
+                photo.id,
+                max_attempts=ai_max_attempts,
+                provider_name="deepseek",
+            )
+        return result
+
+    if job.job_type == PHOTO_JOB_TYPE_SLIDE_DESIGN_GENERATE:
+        if photo is None:
+            _mark_ai_job_failed(db, job, None, "Photo not found")
+            return True
+        return process_slide_design_generate_job(db, job, photo)
+
     try:
         if photo is None:
             raise RuntimeError(f"Photo does not exist: {job.photo_id}")
@@ -221,4 +652,27 @@ def process_next_photo_job(
         return True
 
     mark_job_succeeded(db, job, photo, metadata)
+
+    # ── Enqueue reverse geocoding if GPS exists ────────────────
+    if (
+        geocoding is not None
+        and geocoding.enabled
+        and metadata.gps_lat is not None
+        and metadata.gps_lng is not None
+    ):
+        create_reverse_geocode_job(
+            db,
+            photo.id,
+            max_attempts=geocoding_max_attempts,
+            provider_name=geocoding.provider_name,
+        )
+
+    # ── Enqueue vision_analyze if AI enabled ──────────────────
+    if ai_enabled:
+        create_vision_analyze_job(
+            db,
+            photo.id,
+            max_attempts=ai_max_attempts,
+        )
+
     return True

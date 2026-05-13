@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -21,7 +21,7 @@ class PhotoProcessingJob(Base):
     __tablename__ = "photo_processing_jobs"
     __table_args__ = (
         CheckConstraint(
-            "job_type in ('photo_ingest', 'slide_design_generate')",
+            "job_type in ('photo_ingest', 'slide_design_generate', 'reverse_geocode', 'vision_analyze')",
             name="ck_photo_processing_jobs_job_type",
         ),
         CheckConstraint(
@@ -42,6 +42,10 @@ class PhotoProcessingJob(Base):
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text())
+    ai_provider: Mapped[str | None] = mapped_column(String(50))
+    ai_model: Mapped[str | None] = mapped_column(String(100))
+    ai_prompt_version: Mapped[str | None] = mapped_column(String(30))
+    ai_raw_summary: Mapped[str | None] = mapped_column(Text())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(

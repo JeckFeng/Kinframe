@@ -21,6 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--username", required=True)
     parser.add_argument("--display-name", required=True)
     parser.add_argument("--password")
+    parser.add_argument("--role", default="admin", choices=("admin", "member"), help="User role (default: admin)")
     parser.add_argument(
         "--create-tables",
         action="store_true",
@@ -47,7 +48,7 @@ def main() -> int:
             username=args.username,
             display_name=args.display_name,
             password=password,
-            role="admin",
+            role=args.role,
             is_active=True,
         )
         try:

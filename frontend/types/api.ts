@@ -36,10 +36,13 @@ export interface Photo {
   id: string
   owner_id: string
   category: PhotoCategory
+  category_source: string
+  caption_source: string
   user_message: string | null
   ai_caption: string | null
   final_caption: string | null
   ai_category_suggestion: string | null
+  ai_analysis_json: Record<string, unknown> | null
   ai_caption_enabled: boolean
   ai_category_enabled: boolean
   include_in_showcase: boolean
@@ -60,6 +63,16 @@ export interface Photo {
   camera_make: string | null
   camera_model: string | null
   exif_json: Record<string, unknown> | null
+  location_name: string | null
+  location_country: string | null
+  location_region: string | null
+  location_city: string | null
+  location_district: string | null
+  location_road: string | null
+  geocoding_status: string
+  geocoding_provider: string | null
+  geocoding_error: string | null
+  geocoded_at: string | null
   status: PhotoStatus
   processing_message: string | null
   created_at: string
@@ -136,4 +149,68 @@ export interface AdminJobItem {
   photo_height: number | null
   photo_taken_at: string | null
   photo_user_message: string | null
+}
+
+export interface AdminPhoto {
+  id: string
+  owner_id: string
+  category: string
+  category_source: string
+  caption_source: string
+  user_message: string | null
+  ai_caption: string | null
+  final_caption: string | null
+  ai_category_suggestion: string | null
+  ai_analysis_json: Record<string, unknown> | null
+  ai_caption_enabled: boolean
+  ai_category_enabled: boolean
+  include_in_showcase: boolean
+  time_source: string
+  gps_lat: number | null
+  gps_lng: number | null
+  camera_make: string | null
+  camera_model: string | null
+  exif_json: Record<string, unknown> | null
+  location_name: string | null
+  location_country: string | null
+  location_region: string | null
+  location_city: string | null
+  location_district: string | null
+  location_road: string | null
+  geocoding_status: string
+  geocoding_provider: string | null
+  geocoding_error: string | null
+  geocoded_at: string | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminCategory {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  legacy_slug: string | null
+  sort_order: number
+  is_active: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AuditLogItem {
+  id: string
+  admin_id: string | null
+  action: string
+  target_type: string
+  target_id: string | null
+  detail: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogItem[]
+  total: number
+  limit: number
+  offset: number
 }

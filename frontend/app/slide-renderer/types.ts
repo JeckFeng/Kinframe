@@ -1,5 +1,5 @@
-/** Slide design layer types supported in v0.1. */
-export type LayerType = 'shape' | 'image' | 'text' | 'timeline'
+/** Slide design layer types supported in v0.2. */
+export type LayerType = 'shape' | 'image' | 'text' | 'timeline' | 'background' | 'mask'
 
 /** Normalized 0–1 rectangle. */
 export interface LayerRect {
@@ -54,13 +54,33 @@ export interface TextLayer extends LayerBase {
 export interface TimelineLayer extends LayerBase {
   type: 'timeline'
   label?: string
+  timeText?: string
+  locationText?: string
   style?: {
     color?: string
     fontSize?: string
   }
 }
 
-export type Layer = ShapeLayer | ImageLayer | TextLayer | TimelineLayer
+/** Background layer — full-screen gradient or solid color. */
+export interface BackgroundLayer extends LayerBase {
+  type: 'background'
+  style?: {
+    gradient?: string
+    color?: string
+  }
+}
+
+/** Mask layer — semi-transparent overlay for mood/depth. */
+export interface MaskLayer extends LayerBase {
+  type: 'mask'
+  style?: {
+    color?: string
+    opacity?: number
+  }
+}
+
+export type Layer = ShapeLayer | ImageLayer | TextLayer | TimelineLayer | BackgroundLayer | MaskLayer
 
 /** Template parameters provided by the design. */
 export interface TemplateParams {
@@ -78,6 +98,13 @@ export interface RenderPolicy {
   allowJavaScript: boolean
 }
 
+/** AI generation metadata — optional provenance info. */
+export interface SlideAiMeta {
+  provider?: string
+  model?: string
+  promptVersion?: string
+}
+
 /** Top-level slide design document. */
 export interface SlideDesign {
   photoId: string
@@ -86,6 +113,7 @@ export interface SlideDesign {
   layers: Layer[]
   styleTokens: Record<string, string>
   renderPolicy: RenderPolicy
+  aiMeta?: SlideAiMeta
 }
 
 /** Template definition from slide_templates.json. */

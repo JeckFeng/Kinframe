@@ -11,9 +11,22 @@ import type {
 const ALLOWED_TEMPLATE_IDS = new Set(
   templatesConfig.templates.map((template) => template.id),
 )
-const ALLOWED_LAYER_TYPES: Set<string> = new Set(['shape', 'image', 'text', 'timeline'])
+const ALLOWED_LAYER_TYPES: Set<string> = new Set(['shape', 'image', 'text', 'timeline', 'background', 'mask'])
 const ALLOWED_CSS_PREFIX = whitelistConfig.variablePrefix as string
 const RECT_KEYS = new Set(['x', 'y', 'width', 'height'])
+
+/** Layout-breaking CSS property tokens that must be blocked. */
+const BLOCKED_CSS_TOKENS = [
+  'position:',
+  'display:',
+  'flex',
+  'grid',
+  'transform:',
+  'z-index:',
+  'overflow:',
+  'visibility:',
+  'pointer-events:',
+]
 
 export class SlideDesignValidationError extends Error {
   constructor(message: string) {
@@ -81,14 +94,25 @@ function validateLayer(layer: unknown, index: number): Layer | null {
     if (typeof l.content !== 'string') {
       throw new SlideDesignValidationError(`layer ${index}: text layer missing "content"`)
     }
+    let content = l.content as string
+    if (content.length > 200) {
+      content = content.slice(0, 200)
+    }
     const style = l.style && typeof l.style === 'object' ? (l.style as Record<string, unknown>) : undefined
+    let fontSize = typeof style?.fontSize === 'string' ? style.fontSize : undefined
+    if (fontSize) {
+      const px = parseFloat(fontSize)
+      if (!Number.isNaN(px) && px > 120) {
+        fontSize = '120px'
+      }
+    }
     return {
       ...base,
       type: 'text',
-      content: l.content as string,
+      content,
       style: style && typeof style === 'object' ? {
         color: typeof style.color === 'string' ? style.color : undefined,
-        fontSize: typeof style.fontSize === 'string' ? style.fontSize : undefined,
+        fontSize,
         textAlign: style.textAlign as 'left' | 'center' | 'right' | undefined,
       } : undefined,
     }
@@ -109,13 +133,50 @@ function validateLayer(layer: unknown, index: number): Layer | null {
 
   if (type === 'timeline') {
     const style = l.style && typeof l.style === 'object' ? (l.style as Record<string, unknown>) : undefined
+    let fontSize = typeof style?.fontSize === 'string' ? style.fontSize : undefined
+    if (fontSize) {
+      const px = parseFloat(fontSize)
+      if (!Number.isNaN(px) && px > 120) {
+        fontSize = '120px'
+      }
+    }
     return {
       ...base,
       type: 'timeline',
       label: typeof l.label === 'string' ? l.label : undefined,
+      timeText: typeof l.timeText === 'string' ? l.timeText : undefined,
+      locationText: typeof l.locationText === 'string' ? l.locationText : undefined,
       style: style && typeof style === 'object' ? {
         color: typeof style.color === 'string' ? style.color : undefined,
-        fontSize: typeof style.fontSize === 'string' ? style.fontSize : undefined,
+        fontSize,
+      } : undefined,
+    }
+  }
+
+  if (type === 'background') {
+    const style = l.style && typeof l.style === 'object' ? (l.style as Record<string, unknown>) : undefined
+    return {
+      ...base,
+      type: 'background',
+      style: style && typeof style === 'object' ? {
+        gradient: typeof style.gradient === 'string' ? style.gradient : undefined,
+        color: typeof style.color === 'string' ? style.color : undefined,
+      } : undefined,
+    }
+  }
+
+  if (type === 'mask') {
+    const style = l.style && typeof l.style === 'object' ? (l.style as Record<string, unknown>) : undefined
+    let opacity = typeof style?.opacity === 'number' ? style.opacity : undefined
+    if (opacity !== undefined) {
+      opacity = Math.max(0, Math.min(1, opacity))
+    }
+    return {
+      ...base,
+      type: 'mask',
+      style: style && typeof style === 'object' ? {
+        color: typeof style.color === 'string' ? style.color : undefined,
+        opacity,
       } : undefined,
     }
   }
@@ -154,6 +215,9 @@ function sanitizeStyleTokens(tokens: unknown): Record<string, string> {
       lower.includes('@import') ||
       lower.includes('url(')
     ) {
+      continue
+    }
+    if (BLOCKED_CSS_TOKENS.some(token => lower.includes(token))) {
       continue
     }
     output[key] = value
@@ -215,6 +279,15 @@ export function validateSlideDesign(value: unknown): SlideDesign {
   // Sanitize style tokens
   const styleTokens = sanitizeStyleTokens(doc.styleTokens)
 
+  const aiMeta = doc.aiMeta
+  const validatedAiMeta = aiMeta && typeof aiMeta === 'object'
+    ? {
+        provider: typeof (aiMeta as Record<string, unknown>).provider === 'string' ? (aiMeta as Record<string, unknown>).provider as string : undefined,
+        model: typeof (aiMeta as Record<string, unknown>).model === 'string' ? (aiMeta as Record<string, unknown>).model as string : undefined,
+        promptVersion: typeof (aiMeta as Record<string, unknown>).promptVersion === 'string' ? (aiMeta as Record<string, unknown>).promptVersion as string : undefined,
+      }
+    : undefined
+
   return {
     photoId: doc.photoId as string,
     templateId: templateId as string,
@@ -226,5 +299,6 @@ export function validateSlideDesign(value: unknown): SlideDesign {
       allowHtml: false,
       allowJavaScript: false,
     },
+    aiMeta: validatedAiMeta,
   }
 }

@@ -5,6 +5,8 @@ const props = defineProps<{
   layer: TimelineLayer
   photoIndex?: number
   photoCount?: number
+  timeText?: string
+  locationText?: string
 }>()
 
 const timelineStyle = computed(() => {
@@ -21,6 +23,8 @@ const timelineStyle = computed(() => {
 })
 
 const displayLabel = computed(() => props.layer.label || '')
+const displayTime = computed(() => props.timeText || props.layer.timeText || '')
+const displayLocation = computed(() => props.locationText || props.layer.locationText || '')
 </script>
 
 <template>
@@ -40,6 +44,10 @@ const displayLabel = computed(() => props.layer.label || '')
       />
     </div>
     <span v-if="displayLabel" class="kf-timeline-label">{{ displayLabel }}</span>
+    <div v-if="displayTime || displayLocation" class="kf-timeline-meta">
+      <span v-if="displayTime" class="kf-timeline-time">{{ displayTime }}</span>
+      <span v-if="displayLocation" class="kf-timeline-location">{{ displayLocation }}</span>
+    </div>
   </div>
 </template>
 
@@ -75,5 +83,20 @@ const displayLabel = computed(() => props.layer.label || '')
   margin-top: 6px;
   font-size: 0.8em;
   opacity: 0.65;
+}
+
+.kf-timeline-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 0.75em;
+  opacity: 0.55;
+}
+
+.kf-timeline-time,
+.kf-timeline-location {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

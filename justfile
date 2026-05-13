@@ -35,6 +35,14 @@ backend:
       -e THUMBNAIL_SIZE_PX="${THUMBNAIL_SIZE_PX:-512}" \
       -e PREVIEW_MAX_SIZE_PX="${PREVIEW_MAX_SIZE_PX:-2048}" \
       -e HEIC_STRATEGY="${HEIC_STRATEGY:-reject}" \
+      -e AI_ENABLED="${AI_ENABLED:-false}" \
+      -e OLLAMA_ENDPOINT="${OLLAMA_ENDPOINT:-}" \
+      -e OLLAMA_VISION_MODEL="${OLLAMA_VISION_MODEL:-}" \
+      -e DEEPSEEK_BASE_URL="${DEEPSEEK_BASE_URL:-https://api.deepseek.com}" \
+      -e DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}" \
+      -e DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-}" \
+      -e AI_REQUEST_TIMEOUT_SECONDS="${AI_REQUEST_TIMEOUT_SECONDS:-500}" \
+      -e AI_MAX_RETRIES="${AI_MAX_RETRIES:-1}" \
       -v "$PWD/backend:/app" \
       -v /app/.venv \
       kinframe-backend-env:stage5 \
@@ -81,6 +89,21 @@ worker:
       -e THUMBNAIL_SIZE_PX="${THUMBNAIL_SIZE_PX:-512}" \
       -e PREVIEW_MAX_SIZE_PX="${PREVIEW_MAX_SIZE_PX:-2048}" \
       -e HEIC_STRATEGY="${HEIC_STRATEGY:-reject}" \
+      -e AI_ENABLED="${AI_ENABLED:-false}" \
+      -e OLLAMA_ENDPOINT="${OLLAMA_ENDPOINT:-}" \
+      -e OLLAMA_VISION_MODEL="${OLLAMA_VISION_MODEL:-}" \
+      -e DEEPSEEK_BASE_URL="${DEEPSEEK_BASE_URL:-https://api.deepseek.com}" \
+      -e DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}" \
+      -e DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-}" \
+      -e AI_REQUEST_TIMEOUT_SECONDS="${AI_REQUEST_TIMEOUT_SECONDS:-500}" \
+      -e AI_MAX_RETRIES="${AI_MAX_RETRIES:-1}" \
+      -e GEOCODING_ENABLED="${GEOCODING_ENABLED:-false}" \
+      -e GEOCODING_PROVIDER="${GEOCODING_PROVIDER:-nominatim}" \
+      -e NOMINATIM_ENDPOINT="${NOMINATIM_ENDPOINT:-https://nominatim.openstreetmap.org}" \
+      -e AMAP_API_KEY="${AMAP_API_KEY:-}" \
+      -e GEOCODING_TIMEOUT_SECONDS="${GEOCODING_TIMEOUT_SECONDS:-30}" \
+      -e GEOCODING_MAX_RETRIES="${GEOCODING_MAX_RETRIES:-2}" \
+      -e GEOCODING_RATE_LIMIT_PER_SECOND="${GEOCODING_RATE_LIMIT_PER_SECOND:-1.0}" \
       -e WORKER_ARGS="${WORKER_ARGS:-}" \
       -v "$PWD/backend:/app" \
       -v /app/.venv \
@@ -101,6 +124,9 @@ accept-v0:
 
 accept-v0-1:
     scripts/v0.1-acceptance.sh
+
+accept-v0-2:
+    scripts/v0.2-acceptance.sh
 
 backup:
     scripts/backup.sh

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kinframe.local/schemas/slide_design.schema.json",
-  "title": "KinFrame v0.1 Slide Design",
+  "title": "KinFrame v0.2 Slide Design",
   "type": "object",
   "additionalProperties": false,
   "required": ["photoId", "templateId", "templateParams", "layers", "styleTokens", "renderPolicy"],
@@ -27,7 +27,7 @@
           "id": { "type": "string" },
           "type": {
             "type": "string",
-            "enum": ["shape", "image", "text", "timeline"]
+            "enum": ["shape", "image", "text", "timeline", "background", "mask"]
           },
           "role": { "type": "string" },
           "source": { "type": "string" },
@@ -76,6 +76,14 @@
         "mode": { "type": "string" },
         "allowHtml": { "const": false },
         "allowJavaScript": { "const": false }
+      }
+    },
+    "aiMeta": {
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "promptVersion": { "type": "string" }
       }
     }
   }

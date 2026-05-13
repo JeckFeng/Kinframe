@@ -5,6 +5,14 @@ const props = defineProps<{
   layer: TextLayer
 }>()
 
+const cappedFontSize = computed(() => {
+  const raw = props.layer.style?.fontSize
+  if (!raw) return undefined
+  const px = parseFloat(raw)
+  if (!Number.isNaN(px) && px > 120) return '120px'
+  return raw
+})
+
 const textStyle = computed(() => {
   const l = props.layer
   return {
@@ -14,7 +22,7 @@ const textStyle = computed(() => {
     width: `${(l.rect.width * 100).toFixed(3)}%`,
     height: `${(l.rect.height * 100).toFixed(3)}%`,
     color: l.style?.color || 'var(--kf-text-color, #f8fafc)',
-    fontSize: l.style?.fontSize || 'clamp(16px, 2vw, 28px)',
+    fontSize: cappedFontSize.value || 'clamp(16px, 2vw, 28px)',
     textAlign: l.style?.textAlign || 'left',
     fontFamily: l.style?.fontFamily || undefined,
     fontWeight: l.style?.fontWeight !== undefined ? String(l.style.fontWeight) : undefined,
@@ -22,16 +30,21 @@ const textStyle = computed(() => {
     lineHeight: l.style?.lineHeight !== undefined ? String(l.style.lineHeight) : undefined,
   }
 })
+
+const displayContent = computed(() => {
+  const c = props.layer.content
+  return c.length > 200 ? c.slice(0, 200) : c
+})
 </script>
 
 <template>
   <div
-    v-if="layer.content"
+    v-if="displayContent"
     class="kf-layer kf-layer--text"
     :data-layer-id="layer.id || ''"
     :style="textStyle"
   >
-    <p class="kf-text-content">{{ layer.content }}</p>
+    <p class="kf-text-content">{{ displayContent }}</p>
   </div>
 </template>
 
@@ -43,5 +56,6 @@ const textStyle = computed(() => {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  word-break: break-word;
 }
 </style>

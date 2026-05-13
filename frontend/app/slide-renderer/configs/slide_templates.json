@@ -1,5 +1,5 @@
 {
-  "version": "v0.1",
+  "version": "v0.2",
   "templates": [
     {
       "id": "cinematic_fullscreen",
@@ -15,7 +15,7 @@
         "imageFit": ["contain", "cover"],
         "orientation": ["landscape", "portrait"]
       },
-      "allowedLayerTypes": ["shape", "image", "text", "timeline"],
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
       "maxExtraLayers": 6,
       "defaultStyleTokens": {
         "--kf-background-color": "#111111",
@@ -37,7 +37,7 @@
         "imageFit": ["contain", "cover"],
         "orientation": ["landscape", "portrait"]
       },
-      "allowedLayerTypes": ["shape", "image", "text", "timeline"],
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
       "maxExtraLayers": 6,
       "defaultStyleTokens": {
         "--kf-background-color": "#f7f5ef",
@@ -59,7 +59,7 @@
         "imageFit": ["contain", "cover"],
         "orientation": ["landscape", "portrait"]
       },
-      "allowedLayerTypes": ["shape", "image", "text", "timeline"],
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
       "maxExtraLayers": 6,
       "defaultStyleTokens": {
         "--kf-background-color": "#f7f5ef",

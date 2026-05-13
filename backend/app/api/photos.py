@@ -154,6 +154,7 @@ async def _upload_one_photo(
         user_message=user_message,
         ai_caption=None,
         final_caption=user_message,
+        caption_source="user" if user_message else "none",
         ai_category_suggestion=None,
         ai_caption_enabled=ai_caption_enabled,
         ai_category_enabled=ai_category_enabled,
@@ -363,6 +364,9 @@ def get_processing_status(
         error_message=job.error_message if job is not None else None,
         slide_design_status=design.status if design is not None else None,
         slide_design_source=design.source if design is not None else None,
+        ai_provider=job.ai_provider if job is not None else None,
+        ai_model=job.ai_model if job is not None else None,
+        geocoding_status=photo.geocoding_status,
     )
 
 

@@ -3,30 +3,19 @@ import type { Layer } from '../types'
 import ImageLayerComponent from './ImageLayer.vue'
 import TextLayerComponent from './TextLayer.vue'
 import TimelineLayerComponent from './TimelineLayer.vue'
+import ShapeLayerComponent from './ShapeLayer.vue'
+import BackgroundLayerComponent from './BackgroundLayer.vue'
+import MaskLayerComponent from './MaskLayer.vue'
 
 const props = defineProps<{
   layer: Layer
   previewUrl: string
+  thumbnailUrl?: string
   photoIndex?: number
   photoCount?: number
+  timeText?: string
+  locationText?: string
 }>()
-
-const shapeStyle = computed(() => {
-  const layer = props.layer
-  if (layer.type !== 'shape') {
-    return {}
-  }
-  return {
-    position: 'absolute' as const,
-    left: `${(layer.rect.x * 100).toFixed(3)}%`,
-    top: `${(layer.rect.y * 100).toFixed(3)}%`,
-    width: `${(layer.rect.width * 100).toFixed(3)}%`,
-    height: `${(layer.rect.height * 100).toFixed(3)}%`,
-    backgroundColor: (layer.style?.fill as string) || 'transparent',
-    borderRadius: (layer.style?.borderRadius as string) || '0',
-    opacity: layer.style?.opacity !== undefined ? String(layer.style.opacity) : '1',
-  }
-})
 </script>
 
 <template>
@@ -34,6 +23,7 @@ const shapeStyle = computed(() => {
     v-if="layer.type === 'image'"
     :layer="layer"
     :preview-url="previewUrl"
+    :thumbnail-url="thumbnailUrl || previewUrl"
   />
   <TextLayerComponent
     v-else-if="layer.type === 'text'"
@@ -44,11 +34,19 @@ const shapeStyle = computed(() => {
     :layer="layer"
     :photo-index="photoIndex"
     :photo-count="photoCount"
+    :time-text="timeText"
+    :location-text="locationText"
   />
-  <div
+  <ShapeLayerComponent
     v-else-if="layer.type === 'shape'"
-    class="kf-layer kf-layer--shape"
-    :data-layer-id="layer.id || ''"
-    :style="shapeStyle"
+    :layer="layer"
+  />
+  <BackgroundLayerComponent
+    v-else-if="layer.type === 'background'"
+    :layer="layer"
+  />
+  <MaskLayerComponent
+    v-else-if="layer.type === 'mask'"
+    :layer="layer"
   />
 </template>

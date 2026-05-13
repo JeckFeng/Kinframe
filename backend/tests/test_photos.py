@@ -169,6 +169,7 @@ def valid_slide_design_json(photo_id: str, template_id: str = "warm_memory") -> 
             {
                 "id": "photo",
                 "type": "image",
+                "source": "preview",
                 "zIndex": 10,
                 "rect": {"x": 0, "y": 0, "width": 1, "height": 1},
             }
@@ -220,6 +221,9 @@ def test_upload_photo_stores_objects_and_metadata(client_storage_and_session_fac
         "error_message": None,
         "slide_design_status": None,
         "slide_design_source": None,
+        "ai_provider": None,
+        "ai_model": None,
+        "geocoding_status": "not_applicable",
     }
 
 

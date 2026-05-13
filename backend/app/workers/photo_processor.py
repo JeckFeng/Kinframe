@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
+from app.services.geocoding import create_geocoding_service
 from app.services.photo_jobs import process_next_photo_job
 from app.services.storage import MinioObjectStorage
 
@@ -17,12 +18,17 @@ def run_once() -> bool:
 
     settings = get_settings()
     storage = MinioObjectStorage(settings)
+    geocoding = create_geocoding_service(settings)
     with SessionLocal() as db:
         return process_next_photo_job(
             db,
             storage,
             thumbnail_size_px=settings.thumbnail_size_px,
             preview_max_size_px=settings.preview_max_size_px,
+            geocoding=geocoding,
+            geocoding_max_attempts=settings.geocoding_max_retries,
+            ai_enabled=settings.ai_enabled,
+            ai_max_attempts=settings.ai_max_retries + 1,
         )
 
 

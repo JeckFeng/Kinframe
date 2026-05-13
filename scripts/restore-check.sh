@@ -51,6 +51,8 @@ trap cleanup EXIT
 expected_users="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["postgres"]["user_count"])' "$manifest")"
 expected_photos="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["postgres"]["photo_count"])' "$manifest")"
 expected_slide_designs="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["postgres"].get("slide_design_count", 0))' "$manifest")"
+expected_categories="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["postgres"].get("category_count", 0))' "$manifest")"
+expected_audit_logs="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["postgres"].get("audit_log_count", 0))' "$manifest")"
 expected_objects="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["minio"]["object_count"])' "$manifest")"
 
 echo "Starting isolated PostgreSQL restore check..."
@@ -92,10 +94,36 @@ else
   restored_slide_designs="0"
 fi
 
-if [[ "$restored_users" != "$expected_users" || "$restored_photos" != "$expected_photos" || "$restored_slide_designs" != "$expected_slide_designs" ]]; then
+restored_categories_exists="$(
+  docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$pg_name" \
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select to_regclass('public.categories') is not null;"
+)"
+if [[ "$restored_categories_exists" == "t" ]]; then
+  restored_categories="$(
+    docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$pg_name" \
+      psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select count(*) from categories;"
+  )"
+else
+  restored_categories="0"
+fi
+
+restored_audit_logs_exists="$(
+  docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$pg_name" \
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select to_regclass('public.audit_logs') is not null;"
+)"
+if [[ "$restored_audit_logs_exists" == "t" ]]; then
+  restored_audit_logs="$(
+    docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$pg_name" \
+      psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select count(*) from audit_logs;"
+  )"
+else
+  restored_audit_logs="0"
+fi
+
+if [[ "$restored_users" != "$expected_users" || "$restored_photos" != "$expected_photos" || "$restored_slide_designs" != "$expected_slide_designs" || "$restored_categories" != "$expected_categories" || "$restored_audit_logs" != "$expected_audit_logs" ]]; then
   echo "PostgreSQL restore-check count mismatch." >&2
-  echo "Expected users/photos/slide_designs: $expected_users/$expected_photos/$expected_slide_designs" >&2
-  echo "Restored users/photos/slide_designs: $restored_users/$restored_photos/$restored_slide_designs" >&2
+  echo "Expected users/photos/slide_designs/categories/audit_logs: $expected_users/$expected_photos/$expected_slide_designs/$expected_categories/$expected_audit_logs" >&2
+  echo "Restored users/photos/slide_designs/categories/audit_logs: $restored_users/$restored_photos/$restored_slide_designs/$restored_categories/$restored_audit_logs" >&2
   exit 1
 fi
 
@@ -128,4 +156,4 @@ if [[ "$restored_objects" != "$expected_objects" ]]; then
   exit 1
 fi
 
-echo "Restore check passed: users=$restored_users photos=$restored_photos slide_designs=$restored_slide_designs objects=$restored_objects"
+echo "Restore check passed: users=$restored_users photos=$restored_photos slide_designs=$restored_slide_designs categories=$restored_categories audit_logs=$restored_audit_logs objects=$restored_objects"

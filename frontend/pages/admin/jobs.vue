@@ -20,6 +20,8 @@ const STATUS_LABELS: Record<string, string> = {
 const JOB_TYPE_LABELS: Record<string, string> = {
   photo_ingest: '照片入库',
   slide_design_generate: '幻灯片生成',
+  reverse_geocode: '反向地理编码',
+  vision_analyze: 'AI 视觉分析',
 }
 
 function formatJobStatus(status: string): string {
