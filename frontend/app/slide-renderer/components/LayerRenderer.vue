@@ -6,6 +6,8 @@ import TimelineLayerComponent from './TimelineLayer.vue'
 import ShapeLayerComponent from './ShapeLayer.vue'
 import BackgroundLayerComponent from './BackgroundLayer.vue'
 import MaskLayerComponent from './MaskLayer.vue'
+import TextureLayerComponent from './TextureLayer.vue'
+import VignetteLayerComponent from './VignetteLayer.vue'
 
 const props = defineProps<{
   layer: Layer
@@ -47,6 +49,14 @@ const props = defineProps<{
   />
   <MaskLayerComponent
     v-else-if="layer.type === 'mask'"
+    :layer="layer"
+  />
+  <TextureLayerComponent
+    v-else-if="layer.type === 'texture'"
+    :layer="layer"
+  />
+  <VignetteLayerComponent
+    v-else-if="layer.type === 'vignette'"
     :layer="layer"
   />
 </template>

@@ -8,6 +8,8 @@ const { apiFetch } = useApi()
 const { currentUser, loadMe, logout } = useAuth()
 const { formatDate } = useFormat()
 const { displayCategory, showcaseDisplayName } = usePhotoCategories()
+const { preloadAdjacent, cancelPreloads, preloadingCount } = useImagePreload()
+const { getTransitionName, formatPosition, emptyStateMessage } = useSlideNavigation()
 
 type TransitionDirection = 'next-photo' | 'prev-photo' | 'next-category' | 'prev-category' | 'initial'
 
@@ -21,6 +23,14 @@ const categoryVisible = ref(false)
 const transitionDirection = ref<TransitionDirection>('initial')
 const transitionLocked = ref(false)
 const positionMemory = ref<Partial<Record<ShowcaseCategory, number>>>({})
+
+// Mobile-specific state
+const isMobile = ref(false)
+const MOBILE_MAX_WIDTH = 428
+let touchStartX = 0
+let touchStartY = 0
+const SWIPE_THRESHOLD = 50
+
 let hideTimer: ReturnType<typeof setTimeout> | null = null
 let wheelAccumulator = 0
 let wheelTimer: ReturnType<typeof setTimeout> | null = null
@@ -77,15 +87,7 @@ function isInteractiveElement(target: EventTarget | null): boolean {
   return target.closest('button, a, input, textarea, [role="menuitem"], aside') !== null
 }
 
-const transitionName = computed(() => {
-  switch (transitionDirection.value) {
-    case 'next-photo': return 'kf-photo-next'
-    case 'prev-photo': return 'kf-photo-prev'
-    case 'next-category': return 'kf-category-next'
-    case 'prev-category': return 'kf-category-prev'
-    default: return 'kf-fade'
-  }
-})
+const transitionName = computed(() => getTransitionName(transitionDirection.value))
 
 function showCategories() {
   if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
@@ -107,16 +109,8 @@ function toggleCategories() {
   }
 }
 
-function preloadAdjacent() {
-  if (typeof Image === 'undefined') return
-  const photos = activePhotos.value
-  const idx = activeIndex.value
-  const urls: string[] = []
-  if (photos[idx - 1]?.preview_url) urls.push(photos[idx - 1].preview_url)
-  if (photos[idx + 1]?.preview_url) urls.push(photos[idx + 1].preview_url)
-  for (const url of urls) {
-    new Image().src = url
-  }
+function triggerPreload() {
+  preloadAdjacent(activePhotos.value, activeIndex.value)
 }
 
 async function loadShowcase(category: ShowcaseCategory) {
@@ -126,7 +120,7 @@ async function loadShowcase(category: ShowcaseCategory) {
     const data = await apiFetch<ShowcaseResponse>(`/showcase?category=${category}`)
     categories.value = data.categories
     showcasePhotos.value = data.photos
-    preloadAdjacent()
+    triggerPreload()
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error)
   } finally {
@@ -135,6 +129,7 @@ async function loadShowcase(category: ShowcaseCategory) {
 }
 
 async function switchCategory(category: ShowcaseCategory) {
+  cancelPreloads()
   positionMemory.value[activeCategory.value] = activeIndex.value
   const data = await apiFetch<ShowcaseResponse>(`/showcase?category=${category}`)
   activeCategory.value = category
@@ -143,7 +138,7 @@ async function switchCategory(category: ShowcaseCategory) {
   activeIndex.value = idx < data.photos.length ? idx : 0
   showcasePhotos.value = data.photos
   categories.value = data.categories
-  preloadAdjacent()
+  triggerPreload()
 }
 
 async function selectCategoryFade(category: ShowcaseCategory) {
@@ -159,7 +154,7 @@ function nextPhoto() {
   transitionDirection.value = 'next-photo'
   transitionLocked.value = true
   activeIndex.value = (activeIndex.value + 1) % activePhotos.value.length
-  preloadAdjacent()
+  triggerPreload()
   setTimeout(() => { transitionLocked.value = false }, 500)
 }
 
@@ -168,7 +163,7 @@ function previousPhoto() {
   transitionDirection.value = 'prev-photo'
   transitionLocked.value = true
   activeIndex.value = (activeIndex.value - 1 + activePhotos.value.length) % activePhotos.value.length
-  preloadAdjacent()
+  triggerPreload()
   setTimeout(() => { transitionLocked.value = false }, 500)
 }
 
@@ -182,6 +177,41 @@ async function moveCategory(offset: number) {
   showCategories()
   scheduleHideCategories(2000)
   setTimeout(() => { transitionLocked.value = false }, 700)
+}
+
+function checkMobile() {
+  isMobile.value = window.innerWidth <= MOBILE_MAX_WIDTH
+}
+
+function onTouchStart(event: TouchEvent) {
+  if (isInteractiveElement(event.target)) return
+  const touch = event.touches[0]
+  touchStartX = touch.clientX
+  touchStartY = touch.clientY
+}
+
+function onTouchEnd(event: TouchEvent) {
+  if (isInteractiveElement(event.target)) return
+  if (!activePhotos.value.length || transitionLocked.value) return
+  const touch = event.changedTouches[0]
+  const dx = touch.clientX - touchStartX
+  const dy = touch.clientY - touchStartY
+  const absDx = Math.abs(dx)
+  const absDy = Math.abs(dy)
+
+  if (Math.max(absDx, absDy) < SWIPE_THRESHOLD) return
+
+  if (absDx > absDy) {
+    // Horizontal swipe → photo navigation
+    event.preventDefault()
+    if (dx < 0) nextPhoto()
+    else previousPhoto()
+  } else {
+    // Vertical swipe → category navigation
+    event.preventDefault()
+    if (dy < 0) moveCategory(1)
+    else moveCategory(-1)
+  }
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -229,16 +259,23 @@ if (!currentUser.value) {
 }
 
 onMounted(() => {
+  checkMobile()
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('click', onMouseClick)
   window.addEventListener('contextmenu', onContextMenu)
   window.addEventListener('wheel', onWheel, { passive: false })
+  window.addEventListener('touchstart', onTouchStart, { passive: true })
+  window.addEventListener('touchend', onTouchEnd, { passive: false })
+  window.addEventListener('resize', checkMobile)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('click', onMouseClick)
   window.removeEventListener('contextmenu', onContextMenu)
   window.removeEventListener('wheel', onWheel)
+  window.removeEventListener('touchstart', onTouchStart)
+  window.removeEventListener('touchend', onTouchEnd)
+  window.removeEventListener('resize', checkMobile)
   if (hideTimer) clearTimeout(hideTimer)
   if (wheelTimer) clearTimeout(wheelTimer)
 })
@@ -248,27 +285,32 @@ onBeforeUnmount(() => {
   <section class="relative h-screen overflow-hidden bg-neutral-950 text-white">
     <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.06),transparent_55%)]" />
 
-    <!-- Hidden top menu — revealed on hover -->
-    <div class="group/menu fixed inset-x-0 top-0 z-40">
-      <div class="h-3" />
+    <!-- Hidden top menu — tap top area on mobile to reveal -->
+    <div
+      class="group/menu fixed inset-x-0 top-0 z-40"
+      :class="isMobile ? 'cursor-pointer' : ''"
+      @click.stop="isMobile ? isMobile = false : undefined"
+    >
+      <div class="h-3 sm:h-4" />
       <div
-        class="mx-auto flex max-w-6xl translate-y-[-0.75rem] items-center justify-between gap-4 px-4 py-3 opacity-0 transition duration-300 group-hover/menu:translate-y-0 group-hover/menu:opacity-100 focus-within:translate-y-0 focus-within:opacity-100 sm:px-6"
+        class="mx-auto flex max-w-6xl translate-y-[-0.75rem] items-center justify-between gap-4 px-4 py-3 opacity-0 transition duration-300 group-hover/menu:translate-y-0 group-hover/menu:opacity-100 focus-within:translate-y-0 focus-within:opacity-100"
+        :class="isMobile ? 'translate-y-0 opacity-100 sm:translate-y-[-0.75rem] sm:opacity-0' : 'sm:px-6'"
       >
-        <NuxtLink to="/showcase" class="focus-ring inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold bg-neutral-950/35 backdrop-blur-xl border border-white/8 shadow-lg shadow-black/20">
+        <NuxtLink to="/showcase" class="focus-ring inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold bg-neutral-950/35 backdrop-blur-xl border border-white/8 shadow-lg shadow-black/20 min-h-[44px] sm:min-h-0">
           <Images class="h-4 w-4 text-moss" aria-hidden="true" />
           KinFrame
         </NuxtLink>
         <nav class="flex items-center gap-2 rounded-md px-2 py-2 bg-neutral-950/35 backdrop-blur-xl border border-white/8 shadow-lg shadow-black/20">
-          <NuxtLink to="/gallery" class="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/10" title="Gallery">
+          <NuxtLink to="/gallery" class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10" title="Gallery">
             <Grid3X3 class="h-4 w-4" aria-hidden="true" />
           </NuxtLink>
-          <NuxtLink to="/upload" class="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/10" title="Upload">
+          <NuxtLink to="/upload" class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10" title="Upload">
             <Upload class="h-4 w-4" aria-hidden="true" />
           </NuxtLink>
           <NuxtLink
             v-if="currentUser?.role === 'admin'"
             to="/admin/users"
-            class="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/10"
+            class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10"
             title="Users"
           >
             <Users class="h-4 w-4" aria-hidden="true" />
@@ -276,14 +318,14 @@ onBeforeUnmount(() => {
           <NuxtLink
             v-if="currentUser?.role === 'admin'"
             to="/admin/jobs"
-            class="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/10"
+            class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10"
             title="Jobs"
           >
             <ListTodo class="h-4 w-4" aria-hidden="true" />
           </NuxtLink>
           <button
             type="button"
-            class="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/10"
+            class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10"
             title="Log out"
             @click="logout"
           >
@@ -292,6 +334,18 @@ onBeforeUnmount(() => {
         </nav>
       </div>
     </div>
+
+    <!-- Mobile hamburger for categories -->
+    <button
+      type="button"
+      class="fixed left-3 top-1/2 z-30 -translate-y-1/2 rounded-full bg-neutral-950/40 backdrop-blur-md border border-white/10 p-3 shadow-lg sm:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
+      :aria-label="categoryVisible ? 'Hide categories' : 'Show categories'"
+      @click="toggleCategories"
+    >
+      <span class="block w-4 h-px bg-white/70 mb-1" />
+      <span class="block w-4 h-px bg-white/70 mb-1" />
+      <span class="block w-4 h-px bg-white/70" />
+    </button>
 
     <!-- Left category sidebar — hover trigger strip -->
     <div
@@ -389,7 +443,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-else class="text-center">
         <h1 class="text-2xl font-semibold">{{ activeCategoryMeta?.name || 'KinFrame' }}</h1>
-        <p class="mt-2 text-sm text-white/65">还没有可放映的照片</p>
+        <p class="mt-2 text-sm text-white/65">{{ emptyStateMessage(activeCategoryMeta?.name || '') }}</p>
         <NuxtLink to="/upload" class="mt-4 inline-block rounded-md bg-moss px-4 py-2 text-sm font-medium text-white hover:bg-moss/90">
           上传照片
         </NuxtLink>
@@ -397,9 +451,9 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Bottom info bar -->
-    <div class="pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/70 to-transparent px-4 pb-5 pt-16 sm:px-8">
+    <div class="pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/70 to-transparent px-3 pb-4 pt-12 sm:px-8 sm:pb-5 sm:pt-16">
       <div class="mx-auto flex max-w-6xl items-end justify-between gap-4">
-        <div>
+        <div class="hidden sm:block">
           <p class="text-sm font-semibold">{{ activeCategoryMeta?.name ? showcaseDisplayName(activeCategoryMeta.name) : showcaseDisplayName(activeCategory) }}</p>
           <Transition name="kf-caption" mode="out-in">
             <p v-if="currentItem" :key="slideKey" class="mt-1 max-w-xl text-sm text-white/70">
@@ -408,9 +462,13 @@ onBeforeUnmount(() => {
             </p>
           </Transition>
         </div>
-        <div class="flex items-center gap-3 text-sm text-white/70">
+        <!-- Mobile: compact position indicator only -->
+        <div class="sm:hidden w-full text-center">
+          <p class="text-xs text-white/50">{{ activeCategoryMeta?.name ? showcaseDisplayName(activeCategoryMeta.name) : '' }}</p>
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3 text-sm text-white/70">
           <ChevronLeft class="h-4 w-4" aria-hidden="true" />
-          <span>{{ activePhotos.length ? activeIndex + 1 : 0 }} / {{ activePhotos.length }}</span>
+          <span class="text-xs sm:text-sm">{{ formatPosition(activeIndex, activePhotos.length) }}</span>
           <ChevronRight class="h-4 w-4" aria-hidden="true" />
         </div>
       </div>

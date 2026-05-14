@@ -2,8 +2,17 @@
 
 from typing import Any
 
-ALLOWED_TEMPLATE_IDS = {"cinematic_fullscreen", "warm_memory", "minimal_white"}
-ALLOWED_LAYER_TYPES = {"shape", "image", "text", "timeline", "background", "mask"}
+ALLOWED_TEMPLATE_IDS = {
+    "cinematic_fullscreen",
+    "warm_memory",
+    "minimal_white",
+    "poetic_landscape",
+    "magazine_left",
+    "gallery_center",
+    "dark_exhibition",
+    "pet_portrait",
+}
+ALLOWED_LAYER_TYPES = {"shape", "image", "text", "timeline", "background", "mask", "texture", "vignette"}
 REQUIRED_DESIGN_KEYS = {"photoId", "templateId", "templateParams", "layers", "styleTokens", "renderPolicy"}
 RECT_KEYS = {"x", "y", "width", "height"}
 

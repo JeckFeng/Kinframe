@@ -6,8 +6,12 @@ from app.services.ai.ollama_provider import VisionAnalysisResult
 
 PROMPT_VERSION = "slide_design.v1"
 
-ALLOWED_TEMPLATE_IDS = ["cinematic_fullscreen", "warm_memory", "minimal_white"]
-ALLOWED_LAYER_TYPES = ["shape", "image", "text", "timeline", "background", "mask"]
+ALLOWED_TEMPLATE_IDS = [
+    "cinematic_fullscreen", "warm_memory", "minimal_white",
+    "poetic_landscape", "magazine_left", "gallery_center",
+    "dark_exhibition", "pet_portrait",
+]
+ALLOWED_LAYER_TYPES = ["shape", "image", "text", "timeline", "background", "mask", "texture", "vignette"]
 ALLOWED_CSS_PREFIX = "--kf-"
 
 
@@ -43,9 +47,14 @@ def build_slide_design_prompt(
     # ── Templates ─────────────────────────────────────────────────
     parts.append("## Available Templates")
     parts.append(f"Choose from: {', '.join(ALLOWED_TEMPLATE_IDS)}")
-    parts.append("  cinematic_fullscreen: dark background (#111111), dramatic, for photography/travel")
-    parts.append("  warm_memory: light warm background (#f7f5ef), for family/life photos")
-    parts.append("  minimal_white: clean white background (#f7f5ef), for pet portraits / detailed subjects")
+    parts.append("  cinematic_fullscreen: dark (#111111), dramatic full-screen photo, for photography")
+    parts.append("  warm_memory: warm (#f7f5ef), cozy family/life memories")
+    parts.append("  minimal_white: clean white (#f7f5ef), for pet portraits / detailed subjects")
+    parts.append("  poetic_landscape: dark (#0d1b2a), landscape with poetic caption placement")
+    parts.append("  magazine_left: warm (#f7f5ef), magazine-style left photo + right text panel")
+    parts.append("  gallery_center: dark (#1c2128), museum-style centered photo with wide margins")
+    parts.append("  dark_exhibition: dark (#0a0a0f), dramatic exhibition with glowing photo frame")
+    parts.append("  pet_portrait: warm (#2d1a1c), pet-focused with soft rounded photo frame")
 
     # ── Layer types ────────────────────────────────────────────────
     parts.append("## Available Layer Types")
@@ -55,7 +64,34 @@ def build_slide_design_prompt(
     parts.append("  text: captions. Max 200 chars. Use color, fontSize (max 120px), textAlign in style.")
     parts.append("  timeline: date label. Use label, timeText, locationText, color, fontSize (max 120px).")
     parts.append("  background: full-screen gradient or solid color. Use gradient or color in style.")
-    parts.append("  mask: semi-transparent overlay. Use color and opacity (0-1) in style.")
+    parts.append("  mask: semi-transparent overlay. Use color and opacity (0-1) in style. Max opacity 0.65.")
+    parts.append("  texture: full-screen noise/grain overlay. REQUIRES fill.type: 'noise'. Use opacity and blendMode.")
+    parts.append("  vignette: full-screen edge darkening. REQUIRES fill.type: 'radialGradient'. Use opacity. blendMode always 'multiply'.")
+
+    # ── Design presets ─────────────────────────────────────────────
+    parts.append("## Design Presets (use via presetRef)")
+    parts.append("  Layer can reference a preset via presetRef field in any layer.")
+    parts.append("  Available shadow presets: soft_elevation, dramatic_drop, warm_glow, inner_depth, classic_frame, subtle_lift")
+    parts.append("  Available mask presets: left_fade, right_fade, bottom_fade, center_vignette, letterbox, corner_darken")
+    parts.append("  Available lightOrb presets: warm_top_right, cool_top_left, golden_center, warm_bottom, cool_bottom_right, soft_pink_glow")
+    parts.append("  Available timeline presets: minimal_line, soft_glow_line, year_mark, dotted_rhythm")
+    parts.append("  Palette presets (via styleTokens): warm_amber_glow, misty_mountain_blue, golden_hour, soft_blush, forest_depth, ocean_dusk, autumn_charm, cool_mineral, spring_bloom, vintage_sepia, midnight_cinema, morning_dew")
+    parts.append("## Structured Fill & Shadow Models")
+    parts.append("  Fill object: { type: 'solid'|'linearGradient'|'radialGradient'|'imageBlur'|'noise', color?, angle?, center?, radius?, stops? }")
+    parts.append("  Gradient stops: array of { color: '#RRGGBB', opacity: 0-1, position: 0-1 }, 2-5 stops required")
+    parts.append("  Shadow object: { enabled: true, type: 'soft'|'dramatic'|'glow'|'inner', x, y, blur (max 120), spread, color, opacity }")
+    parts.append("## Quality Guidelines")
+    parts.append("  - Text captions must NOT overlap the center 60% area of the photo")
+    parts.append("  - Text color must have sufficient contrast against background (WCAG AA: 4.5:1)")
+    parts.append("  - Mask layers: opacity must be ≤ 0.65")
+    parts.append("  - Total layers must not exceed template maxExtraLayers + 1 base layer")
+    parts.append("  - Gradient stops: always 2-5 stops")
+    parts.append("  - Structure your design for high quality score (≥3/5 checks must pass)")
+    parts.append("## Scoped CSS (optional)")
+    parts.append("  You may include a 'scopedCss' string in styleTokens with safe CSS rules.")
+    parts.append("  Only use selectors: .kf-slide, .kf-layer, .kf-photo-layer, .kf-text-layer, .kf-shape-layer, .kf-mask-layer, .kf-timeline-layer, .kf-caption, .kf-meta, .kf-photo-frame, .kf-caption-panel")
+    parts.append("  Only use properties: color, background-*, opacity, box-shadow, text-shadow, filter, backdrop-filter, mix-blend-mode, border-*, border-radius, letter-spacing, line-height, font-*, text-*, transition-*, animation-*, transform, clip-path, mask-*")
+    parts.append("  NEVER use: position, display, flex, grid, z-index, overflow, visibility, pointer-events, url(), @import, javascript:")
     parts.append("## Constraints")
     parts.append("  rect: {x, y, width, height} all between 0.0 and 1.0, width and height must be > 0")
     parts.append("  zIndex: integer 0-100")
@@ -69,6 +105,7 @@ def build_slide_design_prompt(
     parts.append("  Example: --kf-background-color, --kf-text-color, --kf-accent-color")
     parts.append("  Do NOT use position:, display:, flex, grid, transform:, z-index:,")
     parts.append("  overflow:, visibility:, pointer-events: in styleToken values.")
+    parts.append("  styleTokens object may also include optional 'scopedCss' string with safe CSS rules.")
 
     # ── Photo context ──────────────────────────────────────────────
     parts.append("## Photo Context")

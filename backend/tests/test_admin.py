@@ -384,6 +384,162 @@ class TestAdminRegenerateDesign:
         assert resp.status_code == 403
 
 
+# ── Tests: Admin Granular Regeneration (v0.3-11) ────────────────────
+
+class TestAdminGranularRegenerate:
+    def test_regenerate_full_scope_creates_job(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin", role="admin")
+        _login(client, "admin")
+        owner_id = _seed_user(sf, username="owner_reg1")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "full"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["photo_id"] == photo_id
+        assert data["scope"] == "full"
+        assert data["job_id"] is not None
+
+    def test_regenerate_fallback_scope_works(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin", role="admin")
+        _login(client, "admin")
+        owner_id = _seed_user(sf, username="owner_reg2")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "fallback"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["photo_id"] == photo_id
+        # Fallback generates directly, no job required
+        assert data["scope"] == "fallback"
+
+    def test_regenerate_full_when_ai_disabled_returns_error(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin", role="admin")
+        _login(client, "admin")
+        owner_id = _seed_user(sf, username="owner_reg3")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        # Get the settings from the app's dependency overrides
+        from app.core.config import get_settings as _get_settings
+        test_settings = None
+        for dep_fn, override_fn in client.app.dependency_overrides.items():
+            if dep_fn is _get_settings:
+                test_settings = override_fn()
+                break
+        assert test_settings is not None
+        old_key = test_settings.deepseek_api_key
+        test_settings.deepseek_api_key = ""
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "full"},
+        )
+        # Restore
+        test_settings.deepseek_api_key = old_key
+
+        assert resp.status_code == 400
+        assert "AI" in resp.json()["detail"] or "disabled" in resp.json()["detail"].lower()
+
+    def test_regenerate_fallback_works_when_ai_disabled(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin", role="admin")
+        _login(client, "admin")
+        owner_id = _seed_user(sf, username="owner_reg4")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        # Get the settings from the app's dependency overrides
+        from app.core.config import get_settings as _get_settings
+        test_settings = None
+        for dep_fn, override_fn in client.app.dependency_overrides.items():
+            if dep_fn is _get_settings:
+                test_settings = override_fn()
+                break
+        assert test_settings is not None
+        old_key = test_settings.deepseek_api_key
+        test_settings.deepseek_api_key = ""
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "fallback"},
+        )
+        test_settings.deepseek_api_key = old_key
+
+        assert resp.status_code == 201  # Fallback always works
+
+    def test_regenerate_non_admin_rejected(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="member_reg", role="member")
+        _login(client, "member_reg")
+        owner_id = _seed_user(sf, username="owner_reg5")
+        photo_id = _create_photo(sf, owner_id)
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "full"},
+        )
+        assert resp.status_code == 403
+
+    def test_regenerate_invalid_scope_returns_error(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin", role="admin")
+        _login(client, "admin")
+        owner_id = _seed_user(sf, username="owner_reg6")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "invalid_scope"},
+        )
+        assert resp.status_code == 422
+
+    def test_regenerate_creates_audit_log(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin", role="admin")
+        _login(client, "admin")
+        owner_id = _seed_user(sf, username="owner_reg7")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "full"},
+        )
+        assert resp.status_code == 201
+
+        # Check audit log
+        audit_resp = client.get("/api/admin/audit-logs")
+        assert audit_resp.status_code == 200
+        entries = audit_resp.json()["items"]
+        assert any(
+            e["action"] == "photo.regenerate" and e["target_id"] == photo_id
+            for e in entries
+        )
+
+    def test_regenerate_template_scope_creates_job(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin", role="admin")
+        _login(client, "admin")
+        owner_id = _seed_user(sf, username="owner_reg8")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/regenerate",
+            json={"scope": "template"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["scope"] == "template"
+        assert data["job_id"] is not None
+
+
 # ── Tests: Admin Category API ──────────────────────────────────────
 
 class TestAdminCategories:

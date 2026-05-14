@@ -21,7 +21,7 @@ class PhotoProcessingJob(Base):
     __tablename__ = "photo_processing_jobs"
     __table_args__ = (
         CheckConstraint(
-            "job_type in ('photo_ingest', 'slide_design_generate', 'reverse_geocode', 'vision_analyze')",
+            "job_type in ('photo_ingest', 'slide_design_generate', 'reverse_geocode', 'vision_analyze', 'caption_regenerate', 'template_regenerate', 'css_regenerate', 'fallback_regenerate')",
             name="ck_photo_processing_jobs_job_type",
         ),
         CheckConstraint(

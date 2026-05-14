@@ -128,6 +128,13 @@ accept-v0-1:
 accept-v0-2:
     scripts/v0.2-acceptance.sh
 
+accept-v0-3:
+    scripts/v0.3-acceptance.sh
+
+test-e2e:
+    scripts/e2e-setup.sh
+    cd frontend && npx playwright test --config playwright.config.ts
+
 backup:
     scripts/backup.sh
 

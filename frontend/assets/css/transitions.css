@@ -2,7 +2,9 @@
 :root {
   --kf-ease-cinematic: cubic-bezier(0.22, 1, 0.36, 1);
   --kf-ease-exhibition: cubic-bezier(0.16, 1, 0.3, 1);
+  --kf-motion-easing: var(--kf-ease-cinematic);
   --kf-photo-transition-duration: 680ms;
+  --kf-motion-duration-enter: var(--kf-photo-transition-duration);
   --kf-category-transition-duration: 920ms;
   --kf-photo-blur: 8px;
   --kf-category-blur: 12px;

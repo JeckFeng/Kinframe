@@ -1,6 +1,16 @@
 # KinFrame
 
-KinFrame is a private family photo PPT playback system. v0.2 completes the PRD closed loop: upload → EXIF parsing → geocoding → AI analysis → slide design generation → full-screen `/showcase` playback with keyboard and mouse navigation. AI is optional — the system always falls back to deterministic fallback designs.
+KinFrame is a private family photo PPT playback system. v0.3 upgrades the visual quality to a photography-portfolio-grade immersive experience with 8 slide templates, Fill/Shadow structured models, Texture/Vignette atmosphere layers, design presets, Scoped CSS, and comprehensive test coverage including Playwright E2E. AI is optional — the system always falls back to deterministic fallback designs.
+
+## v0.3 What's New
+
+**Visual System Upgrade**: 8 slide templates (up from 3) with cinematic, magazine, gallery, and portrait styles. Structured Fill model (solid, linearGradient, radialGradient, imageBlur, noise) and Shadow model (soft, dramatic, glow, inner). Design presets system with `presetRef` for reusable visual configurations. Texture and Vignette atmosphere layers for depth and mood.
+
+**Viewing Experience**: Image preloading for <300ms perceived switch latency. Slide transition animations (fade, slide, zoom). Empty category states with upload prompts. Mobile responsive design with touch swipe gestures (50px threshold), 44px minimum touch targets, and 16:9 aspect ratio scaling with letterboxing.
+
+**User Features**: Photo owners can edit their own photo messages inline. Admins have granular regeneration (caption, template, CSS tokens, full, fallback) on the photo detail page. All admin modifications are audit-logged with before/after values.
+
+**Engineering Quality**: Frontend and backend share a single JSON Schema source of truth for slide design validation. Playwright E2E tests cover 10+ core user scenarios. v0.3 acceptance script provides 10-step end-to-end verification.
 
 ## v0.2 What's New
 
@@ -88,26 +98,54 @@ Run backend tests:
 just test-backend
 ```
 
-Run the full v0.2 acceptance suite (requires `just infra`, `just backend`, and `just frontend` running):
+Run frontend unit tests:
+
+```bash
+just test-frontend
+```
+
+Run Playwright E2E tests (requires `just infra`, `just backend`, and `just frontend` running):
+
+```bash
+just test-e2e
+```
+
+The `just test-e2e` recipe seeds test data (admin user, photos across categories) then runs Playwright tests in headless mode. Failed tests produce screenshots for debugging.
+
+Run the full v0.3 acceptance suite (requires `just infra`, `just backend`, and `just frontend` running):
+
+```bash
+just accept-v0-3
+```
+
+Run the v0.2 acceptance suite:
 
 ```bash
 just accept-v0-2
 ```
 
-The v0.2 acceptance script:
+### Playwright Setup
 
-1. Starts Docker infra if needed.
+Playwright must be installed on the host machine (not inside Docker):
+
+```bash
+npx playwright install chromium
+```
+
+The E2E tests run against the local dev server (`localhost:3000`) and use the Nuxt proxy to reach the backend API. Tests are configured in `frontend/playwright.config.ts` with desktop (1280x720) and mobile (390x844) project profiles.
+
+The v0.3 acceptance script:
+
+1. Starts Docker infra if needed, verifies PostgreSQL/Redis/MinIO running.
 2. Creates admin and member test users, logs in with cookies.
-3. Uploads 3 test photos (life, pet, photography).
+3. Uploads 4 test photos across 3 categories (life, pet, photography).
 4. Runs Worker in `--once` mode to process all jobs.
-5. Verifies showcase API returns photos with valid slide designs and presigned preview URLs.
-6. Verifies admin vs user visibility boundaries (sensitive fields absent from public API).
-7. Verifies admin jobs list includes `photo_ingest`, `slide_design_generate`, etc.
-8. Verifies admin categories CRUD.
-9. Verifies admin audit logs are produced and non-admin access is blocked.
-10. Runs backup and restore rehearsal, asserting all table counts match.
-11. Verifies mouse navigation code (left-click, right-click, wheel handlers) present in showcase.
-12. Verifies admin can modify location/caption and reset caption.
+5. Verifies showcase API returns ready photos with valid slide designs.
+6. Verifies admin endpoints: jobs, categories, audit logs; verifies permission boundaries.
+7. Verifies v0.3 new schema fields: Fill model, Shadow model, 8 template IDs, 8 layer types.
+8. Runs Playwright E2E tests (headless).
+9. Runs backup and restore rehearsal, verifying v0.3 data fields in manifest.
+10. Verifies mobile responsive code and runs mobile-viewport Playwright tests.
 
 Run one Worker pass for testing:
 

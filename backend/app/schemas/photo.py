@@ -127,6 +127,12 @@ class PhotoAdminRead(BaseModel):
 PhotoRead = PhotoPublicRead
 
 
+class PhotoMessageUpdate(BaseModel):
+    """Payload for user self-service message editing."""
+
+    user_message: str = Field(..., min_length=1, max_length=2000)
+
+
 class PhotoUpdate(BaseModel):
     """Editable photo fields for regular users."""
 
@@ -148,6 +154,15 @@ class AdminPhotoUpdate(BaseModel):
     location_city: str | None = None
     location_district: str | None = None
     location_road: str | None = None
+
+
+from typing import Literal
+
+
+class RegenerateScope(BaseModel):
+    """Scope for admin granular photo regeneration."""
+
+    scope: Literal["caption", "template", "css_tokens", "full", "fallback"]
 
 
 class PresignedUrlResponse(BaseModel):

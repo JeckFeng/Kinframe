@@ -14,6 +14,7 @@ from app.schemas.photo import (
     PhotoBatchUploadItem,
     PhotoBatchUploadResponse,
     PhotoCategoryRead,
+    PhotoMessageUpdate,
     PhotoProcessingStatusResponse,
     PhotoRead,
     PhotoUpdate,
@@ -23,12 +24,14 @@ from app.schemas.photo import (
 )
 from app.services.photos import (
     PHOTO_STATUS_PROCESSING,
+    PhotoPermissionError,
     can_modify_photo,
     delete_photo,
     get_photo,
     get_photo_by_sha256,
     list_photos,
     update_photo,
+    update_user_message,
 )
 from app.services.photo_jobs import PhotoJobCreateError, create_photo_with_processing_job, get_latest_job_for_photo
 from app.services.categories import get_valid_category_slugs, list_active_categories
@@ -383,6 +386,25 @@ def patch_photo(
     if not can_modify_photo(current_user, photo):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify this photo")
     return PhotoRead.model_validate(update_photo(db, photo, payload))
+
+
+@router.patch("/{photo_id}/message", response_model=PhotoRead)
+def patch_photo_message(
+    photo_id: str,
+    payload: PhotoMessageUpdate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> PhotoRead:
+    """Update the user_message on a photo (owner only, respects admin override)."""
+    photo = _photo_or_404(db, photo_id)
+    try:
+        updated = update_user_message(db, photo, current_user, payload.user_message)
+    except PhotoPermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only edit the message on your own photos",
+        )
+    return PhotoRead.model_validate(updated)
 
 
 @router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)

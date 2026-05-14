@@ -36,6 +36,10 @@ class DuplicatePhotoError(ValueError):
     """Raised when a photo with the same SHA-256 already exists."""
 
 
+class PhotoPermissionError(PermissionError):
+    """Raised when a user attempts an action they are not permitted to perform on a photo."""
+
+
 def utc_now() -> datetime:
     """Return the current UTC timestamp."""
 
@@ -80,6 +84,44 @@ def can_modify_photo(user: User, photo: Photo) -> bool:
     """Return whether a user can modify or delete a photo."""
 
     return user.role == "admin" or photo.owner_id == user.id
+
+
+def update_user_message(db: Session, photo: Photo, requesting_user: User, new_message: str) -> Photo:
+    """Update a photo's user_message, respecting admin override.
+
+    Only the photo owner may update user_message (not admins via this path).
+    Admin overrides (caption_source == 'admin') are preserved.
+    """
+    if photo.owner_id != requesting_user.id:
+        raise PhotoPermissionError(
+            f"User {requesting_user.username} cannot edit message of photo {photo.id}"
+        )
+
+    old_message = photo.user_message
+    photo.user_message = new_message
+
+    # Only update final_caption if admin hasn't manually overridden
+    if photo.caption_source != "admin":
+        photo.final_caption = new_message
+        photo.caption_source = "user"
+
+    photo.updated_at = utc_now()
+    db.add(photo)
+
+    # Audit log
+    from app.models.audit_log import AuditLog
+    audit = AuditLog(
+        admin_id=requesting_user.id,
+        action="user_message_edit",
+        target_type="photo",
+        target_id=photo.id,
+        detail={"before": old_message, "after": new_message},
+    )
+    db.add(audit)
+
+    db.commit()
+    db.refresh(photo)
+    return photo
 
 
 def compute_final_caption(photo: Photo) -> tuple[str | None, str]:

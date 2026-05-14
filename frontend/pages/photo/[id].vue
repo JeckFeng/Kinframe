@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ExternalLink, Loader2, RefreshCw, RotateCcw, Save } from 'lucide-vue-next'
+import { Edit3, ExternalLink, Loader2, RefreshCw, RotateCcw, Save } from 'lucide-vue-next'
 import type { AdminPhoto, Photo, PhotoCategory, PhotoProcessingStatusResponse, PresignedUrlResponse } from '~/types/api'
 
 const route = useRoute()
@@ -9,6 +9,7 @@ const { displayCategory } = usePhotoCategories()
 const { currentUser } = useAuth()
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
+const isOwner = computed(() => currentUser.value?.id === photo.value?.owner_id)
 
 const photo = ref<Photo | null>(null)
 const adminPhoto = ref<AdminPhoto | null>(null)
@@ -32,6 +33,9 @@ const adminLocationRoad = ref('')
 const adminSaving = ref(false)
 const adminRegenerating = ref(false)
 const adminResettingCaption = ref(false)
+
+const editingMessage = ref(false)
+const messageSaving = ref(false)
 
 let processingPollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -140,6 +144,25 @@ async function savePhoto() {
     errorMessage.value = getApiErrorMessage(error)
   } finally {
     saving.value = false
+  }
+}
+
+async function saveMessage() {
+  if (!photo.value) return
+  messageSaving.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    photo.value = await apiFetch<Photo>(`/photos/${photo.value.id}/message`, {
+      method: 'PATCH',
+      body: { user_message: userMessage.value },
+    })
+    editingMessage.value = false
+    successMessage.value = 'Message saved'
+  } catch (error) {
+    errorMessage.value = getApiErrorMessage(error)
+  } finally {
+    messageSaving.value = false
   }
 }
 
@@ -293,41 +316,55 @@ onBeforeUnmount(stopProcessingPoll)
           </p>
         </div>
 
-        <!-- User Edit Form -->
-        <form class="rounded-lg border border-stone-200 bg-white p-4 shadow-sm" @submit.prevent="savePhoto">
-          <div class="space-y-4">
-            <label class="block">
-              <span class="mb-1 block text-sm font-medium text-stone-700">Category</span>
-              <select v-model="category" class="focus-ring w-full rounded-md border border-stone-300 bg-white px-3 py-2">
-                <option value="life">生活照</option>
-                <option value="photography">摄影照</option>
-                <option value="pet">宠物照</option>
-              </select>
-            </label>
-
-            <label class="block">
-              <span class="mb-1 block text-sm font-medium text-stone-700">Message</span>
-              <textarea
-                v-model="userMessage"
-                class="focus-ring min-h-28 w-full rounded-md border border-stone-300 bg-white px-3 py-2"
-                maxlength="2000"
-              />
-            </label>
-
+        <!-- Owner Message Edit -->
+        <div v-if="isOwner" class="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-stone-700">Your Message</h2>
+            <button
+              v-if="!editingMessage"
+              type="button"
+              class="focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-stone-600 hover:bg-stone-100"
+              @click="editingMessage = true"
+            >
+              <Edit3 class="h-3 w-3" />
+              Edit
+            </button>
+          </div>
+          <p v-if="!editingMessage" class="text-sm text-stone-800 whitespace-pre-wrap">
+            {{ photo.user_message || 'No message yet' }}
+          </p>
+          <div v-else class="space-y-3">
+            <textarea
+              v-model="userMessage"
+              class="focus-ring min-h-28 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+              maxlength="2000"
+            />
+            <div v-if="photo.caption_source === 'admin'" class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              An admin has set the final caption. Your message is saved but the displayed caption stays as the admin's until they reset it.
+            </div>
             <p v-if="successMessage" class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
               {{ successMessage }}
             </p>
-
-            <button
-              type="submit"
-              class="focus-ring inline-flex items-center gap-2 rounded-md bg-moss px-4 py-2 font-medium text-white hover:bg-moss/90 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="saving"
-            >
-              <Save class="h-4 w-4" aria-hidden="true" />
-              {{ saving ? 'Saving' : 'Save' }}
-            </button>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 rounded-md bg-moss px-3 py-1.5 text-sm font-medium text-white hover:bg-moss/90 disabled:opacity-50"
+                :disabled="messageSaving"
+                @click="saveMessage"
+              >
+                <Save class="h-3.5 w-3.5" />
+                {{ messageSaving ? 'Saving…' : 'Save Message' }}
+              </button>
+              <button
+                type="button"
+                class="focus-ring rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100"
+                @click="editingMessage = false; userMessage = photo.user_message || ''"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        </form>
+        </div>
 
         <!-- Admin Diagnostic Panel -->
         <div v-if="isAdmin && adminPhoto" class="rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm">

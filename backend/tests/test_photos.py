@@ -467,7 +467,8 @@ def test_worker_generates_fallback_slide_design_for_ready_photo(
     assert design["status"] == "active"
     design_json = design["design_json"]
     assert design_json["photoId"] == payload["id"]
-    assert design_json["templateId"] == "warm_memory"
+    # Life category selects from warm_memory or magazine_left (deterministic via hash)
+    assert design_json["templateId"] in {"warm_memory", "magazine_left"}
     assert set(design_json) == {
         "photoId",
         "templateId",
@@ -511,7 +512,8 @@ def test_fallback_slide_design_does_not_invent_caption_without_message(
 
     design = client.get(f"/api/photos/{photo['id']}/slide-design").json()["design_json"]
 
-    assert design["templateId"] == "minimal_white"
+    # Pet category selects from pet_portrait, minimal_white, or warm_memory
+    assert design["templateId"] in {"pet_portrait", "minimal_white", "warm_memory"}
     assert not any(layer["type"] == "text" and layer.get("role") == "caption" for layer in design["layers"])
     assert any(layer["type"] == "timeline" for layer in design["layers"])
 
@@ -537,7 +539,8 @@ def test_fallback_slide_design_uses_category_and_orientation(
 
     design = client.get(f"/api/photos/{photo['id']}/slide-design").json()["design_json"]
 
-    assert design["templateId"] == "cinematic_fullscreen"
+    # Travel category selects from poetic_landscape, cinematic_fullscreen, or dark_exhibition
+    assert design["templateId"] in {"poetic_landscape", "cinematic_fullscreen", "dark_exhibition"}
     assert design["templateParams"]["orientation"] == "portrait"
     assert design["templateParams"]["imageRect"]["width"] < 0.7
     assert design["templateParams"]["imageRect"]["height"] > 0.8

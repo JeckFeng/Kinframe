@@ -36,33 +36,28 @@ function makeDesign(overrides: Partial<SlideDesign> = {}): SlideDesign {
   }
 }
 
-// ── 3 template designs ──────────────────────────────────────────
+// ── Template validation ──────────────────────────────────────────
 
 describe('validateSlideDesign — valid designs', () => {
-  it('accepts cinematic_fullscreen template', () => {
-    const design = makeDesign({ templateId: 'cinematic_fullscreen' })
-    const result = validateSlideDesign(design)
-    expect(result.templateId).toBe('cinematic_fullscreen')
-    expect(result.layers).toHaveLength(2)
-  })
+  const allTemplateIds = [
+    'cinematic_fullscreen',
+    'warm_memory',
+    'minimal_white',
+    'poetic_landscape',
+    'magazine_left',
+    'gallery_center',
+    'dark_exhibition',
+    'pet_portrait',
+  ]
 
-  it('accepts warm_memory template', () => {
-    const design = makeDesign({
-      templateId: 'warm_memory',
-      styleTokens: { '--kf-background-color': '#f7f5ef', '--kf-text-color': '#171717' },
+  for (const templateId of allTemplateIds) {
+    it(`accepts ${templateId} template`, () => {
+      const design = makeDesign({ templateId })
+      const result = validateSlideDesign(design)
+      expect(result.templateId).toBe(templateId)
+      expect(result.layers.length).toBeGreaterThanOrEqual(1)
     })
-    const result = validateSlideDesign(design)
-    expect(result.templateId).toBe('warm_memory')
-  })
-
-  it('accepts minimal_white template', () => {
-    const design = makeDesign({
-      templateId: 'minimal_white',
-      styleTokens: { '--kf-background-color': '#f7f5ef', '--kf-text-color': '#171717' },
-    })
-    const result = validateSlideDesign(design)
-    expect(result.templateId).toBe('minimal_white')
-  })
+  }
 })
 
 // ── Unknown layer filtering ─────────────────────────────────────
@@ -747,5 +742,457 @@ describe('validateSlideDesign — aiMeta pass-through', () => {
     expect(result.aiMeta?.provider).toBe('ollama')
     expect(result.aiMeta?.model).toBeUndefined()
     expect(result.aiMeta?.promptVersion).toBeUndefined()
+  })
+})
+
+// ── Fill & Shadow models (v0.3 Phase 1) ───────────────────────────
+
+describe('validateSlideDesign — Fill model', () => {
+  it('accepts a shape layer with solid fill', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'shape', zIndex: 2,
+          rect: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+          fill: { type: 'solid', color: '#ff6b6b' },
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const shape = result.layers.find(l => l.type === 'shape')
+    expect(shape).toBeDefined()
+    if (shape && shape.type === 'shape') {
+      expect(shape.fill?.type).toBe('solid')
+      expect(shape.fill?.color).toBe('#ff6b6b')
+    }
+  })
+
+  it('accepts a background layer with linearGradient fill', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'background', zIndex: 0,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: {
+            type: 'linearGradient', angle: 135,
+            stops: [
+              { color: '#1a1a2e', opacity: 1.0, position: 0.0 },
+              { color: '#16213e', opacity: 0.0, position: 1.0 },
+            ],
+          },
+        },
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const bg = result.layers.find(l => l.type === 'background')
+    expect(bg).toBeDefined()
+    if (bg && bg.type === 'background') {
+      expect(bg.fill?.type).toBe('linearGradient')
+      expect(bg.fill?.stops).toHaveLength(2)
+    }
+  })
+
+  it('rejects fill with fewer than 2 stops', () => {
+    expect(() => validateSlideDesign(makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'background', zIndex: 0,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: {
+            type: 'linearGradient',
+            stops: [{ color: '#000', opacity: 1, position: 0 }],
+          },
+        },
+      ],
+    }))).toThrow(SlideDesignValidationError)
+  })
+
+  it('rejects fill with more than 5 stops', () => {
+    expect(() => validateSlideDesign(makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'background', zIndex: 0,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: {
+            type: 'linearGradient',
+            stops: [
+              { color: '#111', opacity: 0, position: 0 },
+              { color: '#222', opacity: 0.25, position: 0.25 },
+              { color: '#333', opacity: 0.5, position: 0.5 },
+              { color: '#444', opacity: 0.75, position: 0.75 },
+              { color: '#555', opacity: 0.9, position: 0.9 },
+              { color: '#666', opacity: 1, position: 1 },
+            ],
+          },
+        },
+      ],
+    }))).toThrow(SlideDesignValidationError)
+  })
+
+  it('clamps stop opacity outside [0,1]', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'background', zIndex: 0,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: {
+            type: 'linearGradient',
+            stops: [
+              { color: '#000', opacity: 1.5, position: 0 },
+              { color: '#fff', opacity: -0.5, position: 1 },
+            ],
+          },
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const bg = result.layers.find(l => l.type === 'background')
+    if (bg && bg.type === 'background' && bg.fill?.stops) {
+      expect(bg.fill.stops[0].opacity).toBe(1.0)
+      expect(bg.fill.stops[1].opacity).toBe(0.0)
+    }
+  })
+})
+
+describe('validateSlideDesign — Shadow model', () => {
+  it('accepts a layer with shadow', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'shape', zIndex: 2,
+          rect: { x: 0.2, y: 0.2, width: 0.6, height: 0.6 },
+          fill: { type: 'solid', color: '#ffffff' },
+          shadow: { enabled: true, type: 'soft', x: 0, y: 32, blur: 80, spread: -12, color: '#000000', opacity: 0.38 },
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const shape = result.layers.find(l => l.type === 'shape')
+    expect(shape).toBeDefined()
+    if (shape && shape.type === 'shape') {
+      expect(shape.shadow?.enabled).toBe(true)
+      expect(shape.shadow?.type).toBe('soft')
+    }
+  })
+
+  it('rejects shadow with invalid type', () => {
+    expect(() => validateSlideDesign(makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'shape', zIndex: 2,
+          rect: { x: 0.2, y: 0.2, width: 0.6, height: 0.6 },
+          shadow: { enabled: true, type: 'extreme', x: 0, y: 0, blur: 10, spread: 0, color: '#000', opacity: 0.5 },
+        },
+      ],
+    }))).toThrow(SlideDesignValidationError)
+  })
+
+  it('clamps shadow blur beyond reasonable range', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'shape', zIndex: 2,
+          rect: { x: 0.2, y: 0.2, width: 0.6, height: 0.6 },
+          shadow: { enabled: true, type: 'soft', x: 0, y: 0, blur: 200, spread: 0, color: '#000', opacity: 0.5 },
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const shape = result.layers.find(l => l.type === 'shape')
+    if (shape && shape.type === 'shape' && shape.shadow) {
+      expect(shape.shadow.blur).toBeLessThanOrEqual(120)
+    }
+  })
+})
+
+describe('validateSlideDesign — backward compatibility', () => {
+  it('accepts background with old flat style.gradient format', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'background', zIndex: 0,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          style: { gradient: 'linear-gradient(135deg, #1a1a2e, #16213e)' },
+        },
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const bg = result.layers.find(l => l.type === 'background')
+    expect(bg).toBeDefined()
+    if (bg && bg.type === 'background') {
+      expect(bg.style?.gradient).toBe('linear-gradient(135deg, #1a1a2e, #16213e)')
+    }
+  })
+
+  it('converts old style.color on background to fill.solid', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'background', zIndex: 0,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          style: { color: '#f7f5ef' },
+        },
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const bg = result.layers.find(l => l.type === 'background')
+    expect(bg).toBeDefined()
+    if (bg && bg.type === 'background') {
+      // Both formats should be present — style for backward compat, fill for new
+      expect(bg.style?.color).toBe('#f7f5ef')
+      expect(bg.fill?.type).toBe('solid')
+      expect(bg.fill?.color).toBe('#f7f5ef')
+    }
+  })
+})
+
+// ── Design presets (v0.3 Phase 1) ──────────────────────────────────
+
+describe('validateSlideDesign — design presets expansion', () => {
+  it('expands a known presetRef on a shape layer', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'shape', zIndex: 5, role: 'light-orb',
+          rect: { x: 0.6, y: 0, width: 0.4, height: 0.4 },
+          presetRef: 'warm_top_right',
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const shape = result.layers.find(l => l.type === 'shape' && l.role === 'light-orb')
+    expect(shape).toBeDefined()
+    if (shape && shape.type === 'shape') {
+      // Preset should have been expanded — fill should be present
+      expect(shape.fill).toBeDefined()
+      expect(shape.fill?.type).toBe('radialGradient')
+    }
+  })
+
+  it('skips layer with unknown presetRef without crashing', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'shape', zIndex: 5,
+          rect: { x: 0.6, y: 0, width: 0.4, height: 0.4 },
+          presetRef: 'nonexistent_preset_xyz',
+        },
+      ],
+    })
+    // Should not throw — unknown preset is skipped with a warning
+    const result = validateSlideDesign(design)
+    // The unknown preset layer should be filtered out
+    const shapes = result.layers.filter(l => l.type === 'shape')
+    expect(shapes.length).toBe(0)
+  })
+
+  it('layers without presetRef are unaffected', () => {
+    const design = makeDesign() // standard design with no presetRefs
+    const result = validateSlideDesign(design)
+    expect(result.layers).toHaveLength(2)
+    expect(result.layers[0].type).toBe('image')
+    expect(result.layers[1].type).toBe('text')
+  })
+})
+
+// ── Texture & Vignette layers (v0.3 Phase 2) ──────────────────────
+
+describe('validateSlideDesign — texture layer', () => {
+  it('accepts a texture layer with noise fill', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'texture', zIndex: 5,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: { type: 'noise' },
+          opacity: 0.15,
+          blendMode: 'overlay',
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const tex = result.layers.find(l => l.type === 'texture')
+    expect(tex).toBeDefined()
+    if (tex && tex.type === 'texture') {
+      expect(tex.fill?.type).toBe('noise')
+      expect(tex.opacity).toBe(0.15)
+      expect(tex.blendMode).toBe('overlay')
+    }
+  })
+
+  it('rejects texture layer with wrong fill type', () => {
+    expect(() => validateSlideDesign(makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'texture', zIndex: 5,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: { type: 'solid', color: '#ffffff' },
+        },
+      ],
+    }))).toThrow(SlideDesignValidationError)
+  })
+
+  it('rejects more than 2 texture layers', () => {
+    expect(() => validateSlideDesign(makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'texture', zIndex: 5,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: { type: 'noise' },
+        },
+        {
+          type: 'texture', zIndex: 6,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: { type: 'noise' },
+        },
+        {
+          type: 'texture', zIndex: 7,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: { type: 'noise' },
+        },
+      ],
+    }))).toThrow(SlideDesignValidationError)
+  })
+})
+
+describe('validateSlideDesign — vignette layer', () => {
+  it('accepts a vignette layer with radialGradient fill', () => {
+    const design = makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'vignette', zIndex: 5,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: {
+            type: 'radialGradient',
+            stops: [
+              { color: '#000000', opacity: 0.0, position: 0.5 },
+              { color: '#000000', opacity: 0.4, position: 1.0 },
+            ],
+          },
+          opacity: 0.3,
+          blendMode: 'multiply',
+        },
+      ],
+    })
+    const result = validateSlideDesign(design)
+    const vig = result.layers.find(l => l.type === 'vignette')
+    expect(vig).toBeDefined()
+    if (vig && vig.type === 'vignette') {
+      expect(vig.fill?.type).toBe('radialGradient')
+      expect(vig.opacity).toBe(0.3)
+    }
+  })
+
+  it('rejects vignette layer with wrong fill type', () => {
+    expect(() => validateSlideDesign(makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'vignette', zIndex: 5,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: { type: 'solid', color: '#000000' },
+        },
+      ],
+    }))).toThrow(SlideDesignValidationError)
+  })
+
+  it('rejects more than 1 vignette layer', () => {
+    expect(() => validateSlideDesign(makeDesign({
+      layers: [
+        {
+          type: 'image', zIndex: 1, source: 'preview',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+        {
+          type: 'vignette', zIndex: 5,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: {
+            type: 'radialGradient',
+            stops: [
+              { color: '#000', opacity: 0, position: 0.5 },
+              { color: '#000', opacity: 0.4, position: 1 },
+            ],
+          },
+        },
+        {
+          type: 'vignette', zIndex: 6,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          fill: {
+            type: 'radialGradient',
+            stops: [
+              { color: '#000', opacity: 0, position: 0.5 },
+              { color: '#000', opacity: 0.4, position: 1 },
+            ],
+          },
+        },
+      ],
+    }))).toThrow(SlideDesignValidationError)
   })
 })

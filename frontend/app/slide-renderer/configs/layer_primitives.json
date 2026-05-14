@@ -1,35 +1,87 @@
 {
-  "version": "v0.1",
+  "version": "v0.3",
   "coordinateSystem": "normalized_0_1",
   "primitives": {
-    "shape": {
-      "description": "Filled rectangle used for backgrounds, panels, and decorative elements.",
+    "background": {
+      "description": "Full-screen background layer with gradient or solid color fill. Always renders at 100%×100% regardless of rect values.",
       "requiredFields": ["type", "zIndex", "rect"],
-      "optionalFields": ["id", "role", "style"],
-      "styleProperties": ["fill"],
-      "maxCountPerSlide": 8
+      "optionalFields": ["id", "role", "style", "fill", "shadow"],
+      "allowedFillTypes": ["solid", "linearGradient", "radialGradient"],
+      "styleProperties": ["gradient", "color"],
+      "maxCountPerSlide": 2,
+      "zIndexRange": [0, 2]
     },
     "image": {
       "description": "The main photo or a secondary image layer.",
       "requiredFields": ["type", "source", "zIndex", "rect"],
       "optionalFields": ["id", "role", "fit"],
-      "styleProperties": ["fit"],
-      "maxCountPerSlide": 1,
-      "supportedFits": ["contain", "cover"]
+      "supportedFits": ["contain", "cover"],
+      "supportedSources": ["preview", "thumbnail", "original"],
+      "maxCountPerSlide": 2
     },
     "text": {
       "description": "Caption, label, or metadata text layer.",
       "requiredFields": ["type", "content", "zIndex", "rect"],
       "optionalFields": ["id", "role", "style"],
-      "styleProperties": ["color", "fontSize"],
-      "maxCountPerSlide": 3
+      "styleProperties": ["color", "fontSize", "textAlign", "fontFamily", "fontWeight", "letterSpacing", "lineHeight"],
+      "maxCountPerSlide": 3,
+      "maxContentLength": 200,
+      "maxFontSizePx": 120
     },
     "timeline": {
       "description": "Bottom timeline bar showing the photo's position in the category sequence.",
       "requiredFields": ["type", "zIndex", "rect"],
-      "optionalFields": ["id", "role", "label"],
+      "optionalFields": ["id", "role", "label", "timeText", "locationText", "style"],
       "styleProperties": ["color", "fontSize"],
-      "maxCountPerSlide": 1
+      "maxCountPerSlide": 1,
+      "maxFontSizePx": 120
+    },
+    "shape": {
+      "description": "Filled rectangle used for backgrounds, panels, decorative elements. Supports structured Fill and Shadow models.",
+      "requiredFields": ["type", "zIndex", "rect"],
+      "optionalFields": ["id", "role", "style", "fill", "shadow"],
+      "allowedFillTypes": ["solid", "linearGradient", "radialGradient", "imageBlur"],
+      "allowedShadowTypes": ["soft", "dramatic", "glow", "inner"],
+      "styleProperties": ["fill", "borderRadius", "opacity"],
+      "maxCountPerSlide": 8
+    },
+    "mask": {
+      "description": "Semi-transparent overlay for creating mood and depth. Supports structured Fill model.",
+      "requiredFields": ["type", "zIndex", "rect"],
+      "optionalFields": ["id", "role", "style", "fill", "shadow"],
+      "allowedFillTypes": ["solid", "linearGradient", "radialGradient"],
+      "styleProperties": ["color", "opacity"],
+      "maxCountPerSlide": 4,
+      "maxOpacity": 0.65
+    },
+    "texture": {
+      "description": "Full-screen noise/grain overlay for film-like texture. Requires fill.type: noise.",
+      "requiredFields": ["type", "zIndex", "rect", "fill"],
+      "optionalFields": ["id", "role", "opacity", "blendMode"],
+      "allowedFillTypes": ["noise"],
+      "allowedBlendModes": ["overlay", "multiply", "screen"],
+      "maxCountPerSlide": 2,
+      "maxOpacity": 0.4
+    },
+    "vignette": {
+      "description": "Full-screen radial gradient overlay for edge darkening. Requires fill.type: radialGradient.",
+      "requiredFields": ["type", "zIndex", "rect", "fill"],
+      "optionalFields": ["id", "role", "opacity", "blendMode"],
+      "allowedFillTypes": ["radialGradient"],
+      "allowedBlendModes": ["multiply"],
+      "maxCountPerSlide": 1,
+      "maxOpacity": 0.5
     }
+  },
+  "gradientStopRules": {
+    "minStops": 2,
+    "maxStops": 5,
+    "opacityRange": [0, 1],
+    "positionRange": [0, 1],
+    "colorFormat": "#RRGGBB or #RGB"
+  },
+  "shadowRules": {
+    "maxBlur": 120,
+    "opacityRange": [0, 1]
   }
 }

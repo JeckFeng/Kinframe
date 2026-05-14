@@ -20,6 +20,7 @@
     "@types/node": "^22.0.0",
     "@vue/test-utils": "^2.4.10",
     "autoprefixer": "^10.4.20",
+    "@playwright/test": "^1.60.0",
     "happy-dom": "^20.9.0",
     "postcss": "^8.4.49",
     "vitest": "^4.1.6"

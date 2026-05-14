@@ -1,5 +1,33 @@
+/** Structured fill model for layer backgrounds. */
+export interface GradientStop {
+  color: string
+  opacity: number
+  position: number
+}
+
+export interface Fill {
+  type: 'solid' | 'linearGradient' | 'radialGradient' | 'imageBlur' | 'noise'
+  color?: string
+  angle?: number
+  center?: { x: number; y: number }
+  radius?: number
+  stops?: GradientStop[]
+}
+
+/** Structured shadow model for layer shadows. */
+export interface Shadow {
+  enabled: boolean
+  type: 'soft' | 'dramatic' | 'glow' | 'inner'
+  x: number
+  y: number
+  blur: number
+  spread: number
+  color: string
+  opacity: number
+}
+
 /** Slide design layer types supported in v0.2. */
-export type LayerType = 'shape' | 'image' | 'text' | 'timeline' | 'background' | 'mask'
+export type LayerType = 'shape' | 'image' | 'text' | 'timeline' | 'background' | 'mask' | 'texture' | 'vignette'
 
 /** Normalized 0–1 rectangle. */
 export interface LayerRect {
@@ -16,6 +44,7 @@ export interface LayerBase {
   role?: string
   zIndex: number
   rect: LayerRect
+  presetRef?: string
 }
 
 /** Shape layer — used for backgrounds, panels, decorative shapes. */
@@ -26,6 +55,8 @@ export interface ShapeLayer extends LayerBase {
     borderRadius?: string
     opacity?: number
   }
+  fill?: Fill
+  shadow?: Shadow
 }
 
 /** Image layer — the main photo. */
@@ -69,6 +100,8 @@ export interface BackgroundLayer extends LayerBase {
     gradient?: string
     color?: string
   }
+  fill?: Fill
+  shadow?: Shadow
 }
 
 /** Mask layer — semi-transparent overlay for mood/depth. */
@@ -78,9 +111,27 @@ export interface MaskLayer extends LayerBase {
     color?: string
     opacity?: number
   }
+  fill?: Fill
+  shadow?: Shadow
 }
 
-export type Layer = ShapeLayer | ImageLayer | TextLayer | TimelineLayer | BackgroundLayer | MaskLayer
+/** Texture layer — full-screen noise/grain overlay for film-like texture. */
+export interface TextureLayer extends LayerBase {
+  type: 'texture'
+  fill?: Fill
+  opacity?: number
+  blendMode?: 'overlay' | 'multiply' | 'screen'
+}
+
+/** Vignette layer — full-screen radial gradient overlay for edge darkening. */
+export interface VignetteLayer extends LayerBase {
+  type: 'vignette'
+  fill?: Fill
+  opacity?: number
+  blendMode?: 'multiply'
+}
+
+export type Layer = ShapeLayer | ImageLayer | TextLayer | TimelineLayer | BackgroundLayer | MaskLayer | TextureLayer | VignetteLayer
 
 /** Template parameters provided by the design. */
 export interface TemplateParams {

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import AppSettings, DbSession, get_current_admin
 from app.models import User
-from app.schemas.photo import AdminPhotoUpdate, PhotoAdminRead
+from app.schemas.photo import AdminPhotoUpdate, PhotoAdminRead, RegenerateScope
 from app.services.audit_logs import create_audit_log
 from app.services.photos import (
     get_photo,
@@ -120,3 +120,109 @@ def regenerate_design(
         },
     )
     return {"photo_id": photo.id, "job_id": job.id, "job_type": job.job_type}
+
+
+AI_REQUIRED_SCOPES = {"caption", "template", "css_tokens", "full"}
+
+
+def _ai_enabled(settings: AppSettings) -> bool:
+    return bool(settings.deepseek_api_key and settings.deepseek_api_key.strip())
+
+
+@router.post("/{photo_id}/regenerate", status_code=status.HTTP_201_CREATED)
+def regenerate_photo(
+    photo_id: str,
+    payload: RegenerateScope,
+    db: DbSession,
+    settings: AppSettings,
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    """Regenerate specific aspects of a photo with granular scope."""
+    photo = _photo_or_404(db, photo_id)
+
+    if payload.scope in AI_REQUIRED_SCOPES and not _ai_enabled(settings):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Scope '{payload.scope}' requires AI but AI is disabled (deepseek_api_key not configured)",
+        )
+
+    from app.services.photo_jobs import (
+        PHOTO_JOB_STATUS_PENDING,
+        create_slide_design_generate_job,
+    )
+    from app.services.fallback_slide_design import build_fallback_slide_design
+    from app.services.slide_designs import (
+        SLIDE_DESIGN_STATUS_ACTIVE,
+        get_latest_active_slide_design,
+        get_latest_slide_design_version,
+        create_slide_design,
+    )
+    from app.schemas.photo import SlideDesignCreate
+    from app.services.exif import ExtractedMetadata
+    from datetime import datetime, timezone
+
+    if payload.scope == "fallback":
+        # Generate deterministic fallback directly
+        from app.services.exif import ExtractedMetadata
+        metadata = ExtractedMetadata(
+            width=photo.width, height=photo.height,
+            taken_at=photo.taken_at,
+            gps_lat=photo.gps_lat, gps_lng=photo.gps_lng,
+            camera_make=photo.camera_make, camera_model=photo.camera_model,
+            exif_json=photo.exif_json,
+        )
+        design_json = build_fallback_slide_design(photo, metadata)
+
+        active_design = get_latest_active_slide_design(db, photo.id)
+        now = datetime.now(timezone.utc)
+        if active_design is not None and active_design.status == SLIDE_DESIGN_STATUS_ACTIVE:
+            active_design.status = "draft"
+            active_design.updated_at = now
+            db.add(active_design)
+
+        version = get_latest_slide_design_version(db, photo.id) + 1
+        create_slide_design(
+            db, photo.id,
+            SlideDesignCreate(
+                version=version, design_json=design_json,
+                source="fallback", status="active", validation_errors=None,
+            ),
+        )
+        photo.updated_at = now
+        db.add(photo)
+        db.commit()
+
+        create_audit_log(
+            db,
+            admin_id=admin.id,
+            action="photo.regenerate",
+            target_type="photo",
+            target_id=photo_id,
+            detail={
+                "scope": "fallback",
+                "summary": f"Admin {admin.username} regenerated fallback design for photo",
+            },
+        )
+        return {"photo_id": photo.id, "scope": payload.scope}
+
+    # AI-required scopes: enqueue slide_design_generate job
+    job = create_slide_design_generate_job(
+        db,
+        photo_id=photo.id,
+        max_attempts=settings.ai_max_retries + 1,
+        provider_name="deepseek",
+    )
+    create_audit_log(
+        db,
+        admin_id=admin.id,
+        action="photo.regenerate",
+        target_type="photo",
+        target_id=photo_id,
+        detail={
+            "scope": payload.scope,
+            "job_id": job.id,
+            "job_type": job.job_type,
+            "summary": f"Admin {admin.username} requested {payload.scope} regeneration for photo",
+        },
+    )
+    return {"photo_id": photo.id, "job_id": job.id, "job_type": job.job_type, "scope": payload.scope}
