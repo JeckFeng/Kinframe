@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Edit3, ExternalLink, Loader2, RefreshCw, RotateCcw, Save } from 'lucide-vue-next'
-import type { AdminPhoto, Photo, PhotoCategory, PhotoProcessingStatusResponse, PresignedUrlResponse } from '~/types/api'
+import type { AdminJobItem, AdminPhoto, Photo, PhotoCategory, PhotoProcessingStatusResponse, PresignedUrlResponse } from '~/types/api'
 
 const route = useRoute()
 const { apiFetch } = useApi()
@@ -43,8 +43,11 @@ const regenScope = ref<RegenerateScope>('full')
 const editingMessage = ref(false)
 const messageSaving = ref(false)
 const showcaseSaving = ref(false)
+const purgeDeleting = ref(false)
+const purgeJobId = ref<string | null>(null)
 
 let processingPollTimer: ReturnType<typeof setInterval> | null = null
+let purgePollTimer: ReturnType<typeof setInterval> | null = null
 
 const STATUS_LABELS: Record<string, string> = {
   uploaded: '已上传',
@@ -104,6 +107,13 @@ function stopProcessingPoll() {
   if (processingPollTimer) {
     clearInterval(processingPollTimer)
     processingPollTimer = null
+  }
+}
+
+function stopPurgePoll() {
+  if (purgePollTimer) {
+    clearInterval(purgePollTimer)
+    purgePollTimer = null
   }
 }
 
@@ -224,6 +234,61 @@ async function toggleShowcaseVisibility() {
     errorMessage.value = getApiErrorMessage(error)
   } finally {
     showcaseSaving.value = false
+  }
+}
+
+async function refreshPurgeJob() {
+  if (!purgeJobId.value) return
+  const jobs = await apiFetch<AdminJobItem[]>('/admin/jobs?job_type=photo_purge')
+  const job = jobs.find((candidate) => candidate.id === purgeJobId.value)
+  if (!job) return
+
+  if (job.status === 'succeeded') {
+    stopPurgePoll()
+    purgeDeleting.value = false
+    await navigateTo('/admin/photos?purged=1')
+    return
+  }
+
+  if (job.status === 'failed') {
+    stopPurgePoll()
+    purgeDeleting.value = false
+    errorMessage.value = job.error_message || 'Permanent delete failed'
+  }
+}
+
+function startPurgePoll() {
+  stopPurgePoll()
+  purgePollTimer = setInterval(() => {
+    refreshPurgeJob().catch(() => stopPurgePoll())
+  }, 1500)
+}
+
+async function deletePhotoPermanently() {
+  if (!photo.value || !isAdmin.value || purgeDeleting.value) return
+  const confirmed = process.client
+    ? window.confirm(
+        'Delete this photo permanently?\n\nThis removes the original, preview, thumbnail, slide designs, and database records. This cannot be undone.',
+      )
+    : false
+  if (!confirmed) return
+
+  purgeDeleting.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    const response = await apiFetch<{ photo_id: string; job_id: string; job_type: string }>(`/admin/photos/${photo.value.id}/delete`, {
+      method: 'POST',
+    })
+    purgeJobId.value = response.job_id
+    successMessage.value = 'Permanent delete requested'
+    await refreshPurgeJob()
+    if (purgeDeleting.value) {
+      startPurgePoll()
+    }
+  } catch (error) {
+    purgeDeleting.value = false
+    errorMessage.value = getApiErrorMessage(error)
   }
 }
 
@@ -358,7 +423,10 @@ onMounted(async () => {
   }
   await loadPhoto()
 })
-onBeforeUnmount(stopProcessingPoll)
+onBeforeUnmount(() => {
+  stopProcessingPoll()
+  stopPurgePoll()
+})
 </script>
 
 <template>
@@ -610,6 +678,26 @@ onBeforeUnmount(stopProcessingPoll)
           <!-- Category Source -->
           <div class="mb-3 text-xs text-stone-600">
             Category source: <span class="font-medium">{{ adminPhoto.category_source }}</span>
+          </div>
+
+          <div class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-3">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-red-800">Danger Zone</h3>
+                <p class="mt-1 text-xs text-red-700">
+                  Permanently removes storage objects, slide designs, jobs, and this photo record.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                :disabled="purgeDeleting"
+                @click="deletePhotoPermanently"
+              >
+                <Loader2 v-if="purgeDeleting" class="h-3.5 w-3.5 animate-spin" />
+                <span>{{ purgeDeleting ? 'Deleting…' : 'Delete Permanently' }}</span>
+              </button>
+            </div>
           </div>
 
           <div class="mb-3 grid grid-cols-3 gap-2 text-xs">

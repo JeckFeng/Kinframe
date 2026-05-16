@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Loader2, RefreshCw } from 'lucide-vue-next'
-import type { AdminCategory, AdminPhotoListItem, AdminPhotoListResponse, Photo } from '~/types/api'
+import type { AdminCategory, AdminJobItem, AdminPhotoListItem, AdminPhotoListResponse, Photo } from '~/types/api'
 
 const { apiFetch } = useApi()
 const { formatDate } = useFormat()
@@ -18,6 +18,8 @@ const designSourceFilter = ref('')
 const failedOnly = ref(false)
 const needsReview = ref(false)
 const visibilityUpdatingId = ref<string | null>(null)
+const deletingPhotoId = ref<string | null>(null)
+const deleteJobId = ref<string | null>(null)
 
 async function loadPhotos() {
   pending.value = true
@@ -76,6 +78,55 @@ async function toggleShowcaseVisibility(photo: AdminPhotoListItem) {
     errorMessage.value = getApiErrorMessage(error)
   } finally {
     visibilityUpdatingId.value = null
+  }
+}
+
+async function refreshDeleteJob(targetPhotoId: string) {
+  if (!deleteJobId.value) return
+  const jobs = await apiFetch<AdminJobItem[]>('/admin/jobs?job_type=photo_purge')
+  const job = jobs.find((candidate) => candidate.id === deleteJobId.value)
+  if (!job) return
+
+  if (job.status === 'succeeded') {
+    photos.value = photos.value.filter((item) => item.id !== targetPhotoId)
+    deletingPhotoId.value = null
+    deleteJobId.value = null
+    return
+  }
+
+  if (job.status === 'failed') {
+    deletingPhotoId.value = null
+    deleteJobId.value = null
+    errorMessage.value = job.error_message || 'Permanent delete failed'
+    await loadPhotos()
+  }
+}
+
+async function deletePhotoPermanently(photo: AdminPhotoListItem) {
+  if (deletingPhotoId.value) return
+  const confirmed = process.client
+    ? window.confirm(
+        'Delete this photo permanently?\n\nThis removes the original, preview, thumbnail, slide designs, and database records. This cannot be undone.',
+      )
+    : false
+  if (!confirmed) return
+
+  deletingPhotoId.value = photo.id
+  errorMessage.value = ''
+  try {
+    const response = await apiFetch<{ photo_id: string; job_id: string; job_type: string }>(`/admin/photos/${photo.id}/delete`, {
+      method: 'POST',
+    })
+    deleteJobId.value = response.job_id
+    await refreshDeleteJob(photo.id)
+    for (let attempt = 0; attempt < 20 && deletingPhotoId.value === photo.id; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      await refreshDeleteJob(photo.id)
+    }
+  } catch (error) {
+    deletingPhotoId.value = null
+    deleteJobId.value = null
+    errorMessage.value = getApiErrorMessage(error)
   }
 }
 
@@ -242,11 +293,20 @@ onMounted(loadPage)
               <button
                 type="button"
                 class="focus-ring inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-mist/60 disabled:opacity-50"
-                :disabled="visibilityUpdatingId === photo.id"
+                :disabled="visibilityUpdatingId === photo.id || deletingPhotoId === photo.id"
                 @click="toggleShowcaseVisibility(photo)"
               >
                 <Loader2 v-if="visibilityUpdatingId === photo.id" class="h-3.5 w-3.5 animate-spin" />
                 <span>{{ photo.include_in_showcase ? 'Hide' : 'Show' }}</span>
+              </button>
+              <button
+                type="button"
+                class="focus-ring ml-2 inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                :disabled="deletingPhotoId === photo.id || visibilityUpdatingId === photo.id"
+                @click="deletePhotoPermanently(photo)"
+              >
+                <Loader2 v-if="deletingPhotoId === photo.id" class="h-3.5 w-3.5 animate-spin" />
+                <span>{{ deletingPhotoId === photo.id ? 'Deleting…' : 'Delete' }}</span>
               </button>
             </td>
           </tr>

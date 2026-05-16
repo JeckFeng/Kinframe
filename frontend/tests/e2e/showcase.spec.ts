@@ -448,6 +448,53 @@ test.describe('Photo detail', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('button', { name: 'Show in Showcase' })).toBeVisible({ timeout: 5000 })
   })
+
+  test('admin sees permanent delete control on photo detail', async ({ page, request }) => {
+    const cookie = await getSessionCookie(request)
+    const showcaseResp = await request.get(`${API_BASE}/showcase`, {
+      headers: { cookie },
+    })
+    expect(showcaseResp.status()).toBe(200)
+    const showcase = await showcaseResp.json()
+    const item = Array.isArray(showcase.photos) ? showcase.photos[0] : null
+    test.skip(!item?.photo?.id, 'No showcase photo available')
+
+    await page.goto(`/photo/${item.photo.id}`)
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('button', { name: 'Delete Permanently' })).toBeVisible({ timeout: 5000 })
+  })
+
+  test('member does not see permanent delete control on photo detail', async ({ page, request }) => {
+    const username = `owner_no_delete_${Date.now()}`
+    await createMemberUser(request, username, 'Owner No Delete')
+    const photo = await uploadPhotoAsMember(request, username, MEMBER_PASS)
+
+    await loginViaApiAs(page, request, username, MEMBER_PASS)
+    await page.goto(`/photo/${photo.id}`)
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('button', { name: 'Delete Permanently' })).toHaveCount(0)
+  })
+
+  test('admin can permanently delete a photo from detail after confirmation', async ({ page, request }) => {
+    const username = `admin_delete_detail_${Date.now()}`
+    await createMemberUser(request, username, 'Admin Delete Detail')
+    const photo = await uploadPhotoAsMember(request, username, MEMBER_PASS)
+    const photoPrefix = photo.id.slice(0, 8)
+
+    await loginViaApi(page, request)
+    await page.goto(`/photo/${photo.id}`)
+    await page.waitForLoadState('networkidle')
+
+    page.once('dialog', async (dialog) => {
+      expect(dialog.message()).toContain('cannot be undone')
+      await dialog.accept()
+    })
+    await page.getByRole('button', { name: 'Delete Permanently' }).click()
+    await expect(page.getByRole('button', { name: 'Deleting…' })).toBeVisible({ timeout: 5000 })
+
+    await page.waitForURL('**/admin/photos?purged=1', { timeout: 20000 })
+    await expect(page.locator('tbody tr').filter({ hasText: photoPrefix })).toHaveCount(0)
+  })
 })
 
 // ── 8. Upload Flow ─────────────────────────────────────────────────
@@ -509,6 +556,24 @@ test.describe('Admin visibility', () => {
     expect(page.url()).toContain('/admin/photos')
     await expect(page.getByText('Photo Operations')).toBeVisible({ timeout: 5000 })
     await expect(page.getByText('Needs review')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('admin photos list exposes permanent delete action', async ({ page, request }) => {
+    const adminCookie = await getSessionCookie(request)
+    const adminPhotosResp = await request.get(`${API_BASE}/admin/photos?showcase_visibility=visible`, {
+      headers: { cookie: adminCookie },
+    })
+    expect(adminPhotosResp.status()).toBe(200)
+    const adminPhotos = await adminPhotosResp.json()
+    const item = Array.isArray(adminPhotos.items) ? adminPhotos.items[0] : null
+    test.skip(!item?.id, 'No admin photo available for delete action test')
+
+    await page.goto('/admin/photos')
+    await page.waitForLoadState('networkidle')
+
+    const photoRow = page.locator('tbody tr').filter({ hasText: item.id.slice(0, 8) }).first()
+    await expect(photoRow).toBeVisible({ timeout: 5000 })
+    await expect(photoRow.getByRole('button', { name: 'Delete' })).toBeVisible({ timeout: 5000 })
   })
 
   test('admin can filter and toggle showcase visibility from admin surfaces', async ({ page, request }) => {
