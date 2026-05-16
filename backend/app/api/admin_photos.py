@@ -2,16 +2,23 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import AppSettings, DbSession, get_current_admin
 from app.models import User
-from app.schemas.photo import AdminPhotoUpdate, PhotoAdminRead, RegenerateScope
+from app.schemas.photo import AdminPhotoListResponse, AdminPhotoUpdate, ManualSlideDesignCreate, PhotoAdminRead, RegenerateScope
+from app.services.admin_photos import build_admin_photo_detail, list_admin_photos
 from app.services.audit_logs import create_audit_log
 from app.services.photos import (
     get_photo,
     reset_photo_caption,
     update_photo_admin,
+)
+from app.services.slide_designs import (
+    DuplicateSlideDesignVersionError,
+    SlideDesignNotFoundError,
+    activate_slide_design,
+    create_manual_slide_design,
 )
 
 router = APIRouter(prefix="/api/admin/photos", tags=["admin-photos"])
@@ -25,6 +32,33 @@ def _photo_or_404(db: DbSession, photo_id: str):
     return photo
 
 
+@router.get("", response_model=AdminPhotoListResponse)
+def get_admin_photos(
+    db: DbSession,
+    _admin: Annotated[User, Depends(get_current_admin)],
+    category: str | None = Query(default=None),
+    geocoding_status: str | None = Query(default=None),
+    ai_status: str | None = Query(default=None),
+    design_source: str | None = Query(default=None),
+    failed_only: bool = Query(default=False),
+    needs_review: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> AdminPhotoListResponse:
+    items, total = list_admin_photos(
+        db,
+        category=category,
+        geocoding_status=geocoding_status,
+        ai_status=ai_status,
+        design_source=design_source,
+        failed_only=failed_only,
+        needs_review=needs_review,
+        limit=limit,
+        offset=offset,
+    )
+    return AdminPhotoListResponse(items=items, total=total, limit=limit, offset=offset)
+
+
 @router.get("/{photo_id}", response_model=PhotoAdminRead)
 def get_admin_photo(
     photo_id: str,
@@ -32,7 +66,7 @@ def get_admin_photo(
     _admin: Annotated[User, Depends(get_current_admin)],
 ) -> PhotoAdminRead:
     """Return full photo metadata including AI diagnostics, EXIF, errors."""
-    return PhotoAdminRead.model_validate(_photo_or_404(db, photo_id))
+    return build_admin_photo_detail(db, _photo_or_404(db, photo_id))
 
 
 @router.patch("/{photo_id}", response_model=PhotoAdminRead)
@@ -59,7 +93,7 @@ def patch_admin_photo(
                 "summary": f"Admin {admin.username} updated photo fields",
             },
         )
-    return PhotoAdminRead.model_validate(photo)
+    return build_admin_photo_detail(db, photo)
 
 
 @router.post("/{photo_id}/reset-caption")
@@ -126,7 +160,11 @@ AI_REQUIRED_SCOPES = {"caption", "template", "css_tokens", "full"}
 
 
 def _ai_enabled(settings: AppSettings) -> bool:
-    return bool(settings.deepseek_api_key and settings.deepseek_api_key.strip())
+    return (
+        bool(settings.ai_enabled)
+        and bool(settings.deepseek_api_key and settings.deepseek_api_key.strip())
+        and bool(settings.deepseek_model and settings.deepseek_model.strip())
+    )
 
 
 @router.post("/{photo_id}/regenerate", status_code=status.HTTP_201_CREATED)
@@ -147,51 +185,24 @@ def regenerate_photo(
         )
 
     from app.services.photo_jobs import (
-        PHOTO_JOB_STATUS_PENDING,
+        PHOTO_JOB_TYPE_CAPTION_REGENERATE,
+        PHOTO_JOB_TYPE_CSS_REGENERATE,
+        PHOTO_JOB_TYPE_FALLBACK_REGENERATE,
+        PHOTO_JOB_TYPE_SLIDE_DESIGN_GENERATE,
+        PHOTO_JOB_TYPE_TEMPLATE_REGENERATE,
+        create_caption_regenerate_job,
+        create_css_regenerate_job,
+        create_fallback_regenerate_job,
         create_slide_design_generate_job,
+        create_template_regenerate_job,
     )
-    from app.services.fallback_slide_design import build_fallback_slide_design
-    from app.services.slide_designs import (
-        SLIDE_DESIGN_STATUS_ACTIVE,
-        get_latest_active_slide_design,
-        get_latest_slide_design_version,
-        create_slide_design,
-    )
-    from app.schemas.photo import SlideDesignCreate
-    from app.services.exif import ExtractedMetadata
-    from datetime import datetime, timezone
 
     if payload.scope == "fallback":
-        # Generate deterministic fallback directly
-        from app.services.exif import ExtractedMetadata
-        metadata = ExtractedMetadata(
-            width=photo.width, height=photo.height,
-            taken_at=photo.taken_at,
-            gps_lat=photo.gps_lat, gps_lng=photo.gps_lng,
-            camera_make=photo.camera_make, camera_model=photo.camera_model,
-            exif_json=photo.exif_json,
+        job = create_fallback_regenerate_job(
+            db,
+            photo.id,
+            max_attempts=1,
         )
-        design_json = build_fallback_slide_design(photo, metadata)
-
-        active_design = get_latest_active_slide_design(db, photo.id)
-        now = datetime.now(timezone.utc)
-        if active_design is not None and active_design.status == SLIDE_DESIGN_STATUS_ACTIVE:
-            active_design.status = "draft"
-            active_design.updated_at = now
-            db.add(active_design)
-
-        version = get_latest_slide_design_version(db, photo.id) + 1
-        create_slide_design(
-            db, photo.id,
-            SlideDesignCreate(
-                version=version, design_json=design_json,
-                source="fallback", status="active", validation_errors=None,
-            ),
-        )
-        photo.updated_at = now
-        db.add(photo)
-        db.commit()
-
         create_audit_log(
             db,
             admin_id=admin.id,
@@ -200,18 +211,46 @@ def regenerate_photo(
             target_id=photo_id,
             detail={
                 "scope": "fallback",
+                "job_id": job.id,
+                "job_type": PHOTO_JOB_TYPE_FALLBACK_REGENERATE,
                 "summary": f"Admin {admin.username} regenerated fallback design for photo",
             },
         )
-        return {"photo_id": photo.id, "scope": payload.scope}
+        return {"photo_id": photo.id, "scope": payload.scope, "job_id": job.id, "job_type": PHOTO_JOB_TYPE_FALLBACK_REGENERATE}
 
-    # AI-required scopes: enqueue slide_design_generate job
-    job = create_slide_design_generate_job(
-        db,
-        photo_id=photo.id,
-        max_attempts=settings.ai_max_retries + 1,
-        provider_name="deepseek",
-    )
+    if payload.scope == "caption":
+        job = create_caption_regenerate_job(
+            db,
+            photo_id=photo.id,
+            max_attempts=settings.ai_max_retries + 1,
+            provider_name="deepseek",
+        )
+        job_type = PHOTO_JOB_TYPE_CAPTION_REGENERATE
+    elif payload.scope == "template":
+        job = create_template_regenerate_job(
+            db,
+            photo_id=photo.id,
+            max_attempts=settings.ai_max_retries + 1,
+            provider_name="deepseek",
+        )
+        job_type = PHOTO_JOB_TYPE_TEMPLATE_REGENERATE
+    elif payload.scope == "css_tokens":
+        job = create_css_regenerate_job(
+            db,
+            photo_id=photo.id,
+            max_attempts=settings.ai_max_retries + 1,
+            provider_name="deepseek",
+        )
+        job_type = PHOTO_JOB_TYPE_CSS_REGENERATE
+    else:
+        job = create_slide_design_generate_job(
+            db,
+            photo_id=photo.id,
+            max_attempts=settings.ai_max_retries + 1,
+            provider_name="deepseek",
+        )
+        job_type = PHOTO_JOB_TYPE_SLIDE_DESIGN_GENERATE
+
     create_audit_log(
         db,
         admin_id=admin.id,
@@ -221,8 +260,74 @@ def regenerate_photo(
         detail={
             "scope": payload.scope,
             "job_id": job.id,
-            "job_type": job.job_type,
+            "job_type": job_type,
             "summary": f"Admin {admin.username} requested {payload.scope} regeneration for photo",
         },
     )
-    return {"photo_id": photo.id, "job_id": job.id, "job_type": job.job_type, "scope": payload.scope}
+    return {"photo_id": photo.id, "job_id": job.id, "job_type": job_type, "scope": payload.scope}
+
+
+@router.post("/{photo_id}/design-versions/{design_id}/activate", response_model=PhotoAdminRead)
+def activate_design_version(
+    photo_id: str,
+    design_id: str,
+    db: DbSession,
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> PhotoAdminRead:
+    photo = _photo_or_404(db, photo_id)
+    try:
+        design = activate_slide_design(db, photo_id, design_id)
+    except SlideDesignNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide design version not found") from exc
+
+    create_audit_log(
+        db,
+        admin_id=admin.id,
+        action="design.activate",
+        target_type="slide_design",
+        target_id=design.id,
+        detail={
+            "photo_id": photo_id,
+            "version": design.version,
+            "source": design.source,
+            "summary": f"Admin {admin.username} set slide design v{design.version} active",
+        },
+    )
+    return build_admin_photo_detail(db, photo)
+
+
+@router.post("/{photo_id}/design-versions/manual", response_model=PhotoAdminRead, status_code=status.HTTP_201_CREATED)
+def create_manual_design_version(
+    photo_id: str,
+    payload: ManualSlideDesignCreate,
+    db: DbSession,
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> PhotoAdminRead:
+    photo = _photo_or_404(db, photo_id)
+    try:
+        design = create_manual_slide_design(
+            db,
+            photo_id,
+            design_json=payload.design_json,
+            activate=payload.activate,
+        )
+    except DuplicateSlideDesignVersionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Concurrent slide design version conflict") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    create_audit_log(
+        db,
+        admin_id=admin.id,
+        action="design.manual_create",
+        target_type="slide_design",
+        target_id=design.id,
+        detail={
+            "photo_id": photo_id,
+            "version": design.version,
+            "status": design.status,
+            "activate": payload.activate,
+            "summary": f"Admin {admin.username} created manual slide design v{design.version}",
+        },
+    )
+    return build_admin_photo_detail(db, photo)

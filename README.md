@@ -1,6 +1,14 @@
 # KinFrame
 
-KinFrame is a private family photo PPT playback system. v0.3 upgrades the visual quality to a photography-portfolio-grade immersive experience with 8 slide templates, Fill/Shadow structured models, Texture/Vignette atmosphere layers, design presets, Scoped CSS, and comprehensive test coverage including Playwright E2E. AI is optional — the system always falls back to deterministic fallback designs.
+KinFrame is a private family photo PPT playback system. v0.4 adds auto-play with configurable intervals and a map album page showing geocoded photos on a China map. v0.3 upgraded the visual quality to a photography-portfolio-grade immersive experience with 8 slide templates, Fill/Shadow structured models, Texture/Vignette atmosphere layers, design presets, Scoped CSS, and comprehensive test coverage including Playwright E2E. AI is optional — the system always falls back to deterministic fallback designs.
+
+## v0.4 What's New
+
+**Auto-play System**: Press Space to start/stop automatic photo playback within the current category. Configure playback interval (3s / 5s / 8s) from the top menu bar. Play/Pause icon shows current state. A subtle progress indicator appears during playback, auto-hiding after 2 seconds of mouse inactivity. Any manual navigation (arrow keys, mouse clicks, scroll wheel, touch swipe) automatically stops auto-play — manual control always takes precedence.
+
+**Map Album** (`/map`): View geocoded photos on a full-viewport China map powered by Leaflet. Photos appear as circular thumbnail markers at their GPS coordinates. Click any marker to see the photo thumbnail, caption, location, and date in a popup; click "查看照片" to navigate to the full photo detail page. Filter markers by category (全部 / 生活 / 摄影 / 萌宠). Reach the map page from the showcase top menu (MapPin icon) or press `M`.
+
+**Navigation**: Press `M` on showcase to navigate to the map album. The top menu bar now includes a MapPin icon link. Space bar toggles auto-play.
 
 ## v0.3 What's New
 
@@ -104,15 +112,21 @@ Run frontend unit tests:
 just test-frontend
 ```
 
-Run Playwright E2E tests (requires `just infra`, `just backend`, and `just frontend` running):
+Run Playwright E2E tests (requires Docker infra plus a reachable backend API; Playwright will start the frontend dev server automatically):
 
 ```bash
 just test-e2e
 ```
 
-The `just test-e2e` recipe seeds test data (admin user, photos across categories) then runs Playwright tests in headless mode. Failed tests produce screenshots for debugging.
+The `just test-e2e` recipe seeds test data against `http://localhost:18000/api`, then runs Playwright in headless mode. Playwright starts the Nuxt dev server automatically, so you do not need a separate `just frontend` terminal for E2E runs. Failed tests produce screenshots for debugging.
 
-Run the full v0.3 acceptance suite (requires `just infra`, `just backend`, and `just frontend` running):
+Run the full v0.4 acceptance suite (requires Docker infra and a reachable backend API; Playwright will start the frontend when needed):
+
+```bash
+just accept-v0-4
+```
+
+Run the v0.3 acceptance suite:
 
 ```bash
 just accept-v0-3
@@ -132,9 +146,16 @@ Playwright must be installed on the host machine (not inside Docker):
 npx playwright install chromium
 ```
 
-The E2E tests run against the local dev server (`localhost:3000`) and use the Nuxt proxy to reach the backend API. Tests are configured in `frontend/playwright.config.ts` with desktop (1280x720) and mobile (390x844) project profiles.
+The E2E tests run against the local frontend dev server (`localhost:3000`) and proxy API traffic to the backend (`localhost:18000` by default). Tests are configured in `frontend/playwright.config.ts` with desktop (1280x720) and mobile (390x844) Chromium profiles.
 
-The v0.3 acceptance script:
+Acceptance and E2E prerequisites:
+
+- Docker daemon must be reachable by the current user.
+- Backend API must be reachable at `http://localhost:18000/api` unless `API_BASE` overrides it.
+- Frontend dev server does not need to be started manually for Playwright; the runner will launch it.
+- If your backend is not on `localhost:18000`, set `KINFRAME_API_PROXY` for Nuxt and `API_BASE` for the scripts.
+
+The v0.4 acceptance script:
 
 1. Starts Docker infra if needed, verifies PostgreSQL/Redis/MinIO running.
 2. Creates admin and member test users, logs in with cookies.
@@ -144,8 +165,10 @@ The v0.3 acceptance script:
 6. Verifies admin endpoints: jobs, categories, audit logs; verifies permission boundaries.
 7. Verifies v0.3 new schema fields: Fill model, Shadow model, 8 template IDs, 8 layer types.
 8. Runs Playwright E2E tests (headless).
-9. Runs backup and restore rehearsal, verifying v0.3 data fields in manifest.
-10. Verifies mobile responsive code and runs mobile-viewport Playwright tests.
+9. Runs backup and restore rehearsal, verifying data fields in manifest.
+10. Verifies auto-play: state variables, Space key handler, Play/Pause icons, interval selector, stopAutoPlay in manual nav, composable file, vitest tests.
+11. Verifies map album: map API endpoint, /map page file, Leaflet dependency, MapPin icon, M key navigation, MapPhotoItem types, E2E tests, vitest tests.
+12. Verifies mobile responsive code and runs mobile-viewport Playwright tests.
 
 Run one Worker pass for testing:
 
@@ -177,11 +200,13 @@ Failed jobs can be retried from `/admin/jobs`.
 | Left Arrow / Left Click | Previous photo |
 | Right Arrow / Right Click | Next photo |
 | Scroll Wheel Up/Down | Switch category (life ↔ photography ↔ pet) |
+| **Space** | **Toggle auto-play on/off** |
 | `C` key | Toggle category sidebar |
+| `M` key | Navigate to map album (`/map`) |
 | `F` key | Toggle fullscreen |
 | `?` key | Show/hide keyboard shortcuts overlay |
 
-Right-click context menu is prevented on the showcase to avoid accidental browser menus.
+Right-click context menu is prevented on the showcase to avoid accidental browser menus. Auto-play advances photos at the configured interval (3s / 5s / 8s) within the current category; any manual navigation stops it. The interval selector and Play/Pause button are in the top menu bar.
 
 ## Configuration
 

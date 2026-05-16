@@ -22,7 +22,7 @@ const maskStyle = computed(() => {
 
 <template>
   <div
-    class="kf-layer kf-layer--mask"
+    class="kf-layer kf-layer--mask kf-mask-layer"
     :data-layer-id="layer.id || ''"
     :style="maskStyle"
   />

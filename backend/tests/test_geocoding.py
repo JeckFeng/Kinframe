@@ -6,7 +6,6 @@ from io import BytesIO
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -31,6 +30,7 @@ from app.services.photo_jobs import (
 )
 from app.services.storage import ObjectStorage
 from app.services.users import create_user
+from tests.http_client import TestClient
 
 
 class FakeObjectStorage(ObjectStorage):

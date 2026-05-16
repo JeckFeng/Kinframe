@@ -189,6 +189,21 @@ describe('validateSlideDesign — style token sanitization', () => {
     expect(result.styleTokens).not.toHaveProperty('--kf-background-color')
     expect(result.styleTokens['--kf-text-color']).toBe('#ffffff')
   })
+
+  it('accepts nested cssVariables and scopedCss, then sanitizes scopedCss', () => {
+    const result = validateSlideDesign(makeDesign({
+      styleTokens: {
+        cssVariables: {
+          '--kf-background-color': '#111111',
+          '--kf-text-color': '#f8fafc',
+        },
+        scopedCss: '.kf-caption { text-wrap: balance; position: absolute; }',
+      } as unknown as SlideDesign['styleTokens'],
+    }))
+    expect(result.styleTokens['--kf-background-color']).toBe('#111111')
+    expect(result.scopedCss).toContain('.kf-caption')
+    expect(result.scopedCss).not.toContain('position: absolute')
+  })
 })
 
 // ── Timeline layer ──────────────────────────────────────────────

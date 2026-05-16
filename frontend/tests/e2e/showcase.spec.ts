@@ -184,7 +184,136 @@ test.describe('Menu behavior', () => {
   })
 })
 
-// ── 6. Category Bar ────────────────────────────────────────────────
+// ── 6. Auto-play (v0.4) ────────────────────────────────────────────
+
+test.describe('Auto-play', () => {
+  test.beforeEach(async ({ page, request }) => {
+    await loginViaApi(page, request)
+    await page.goto('/showcase')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('Space key toggles auto-play Play/Pause button', async ({ page }) => {
+    // Wait for menu to be visible
+    await page.mouse.move(640, 10)
+    await page.waitForTimeout(600)
+
+    // Initially, the Play icon should be visible (not auto-playing)
+    // The button title is "开始自动播放" when paused
+    const playButton = page.getByTitle('开始自动播放')
+    const isPlayVisible = await playButton.isVisible({ timeout: 3000 }).catch(() => false)
+    expect(isPlayVisible).toBe(true)
+
+    // Press Space to start auto-play
+    await page.click('body')
+    await page.keyboard.press('Space')
+
+    // Now the Pause button should be visible (title="暂停自动播放")
+    const pauseButton = page.getByTitle('暂停自动播放')
+    const isPauseVisible = await pauseButton.isVisible({ timeout: 3000 }).catch(() => false)
+    expect(isPauseVisible).toBe(true)
+  })
+
+  test('Space key toggles auto-play off', async ({ page }) => {
+    await page.mouse.move(640, 10)
+    await page.waitForTimeout(600)
+
+    // Start auto-play
+    await page.click('body')
+    await page.keyboard.press('Space')
+
+    // Verify playing state
+    await expect(page.getByTitle('暂停自动播放')).toBeVisible({ timeout: 3000 })
+
+    // Press Space again to stop
+    await page.keyboard.press('Space')
+
+    // Verify paused state
+    await expect(page.getByTitle('开始自动播放')).toBeVisible({ timeout: 3000 })
+  })
+
+  test('ArrowRight stops auto-play', async ({ page }) => {
+    await page.mouse.move(640, 10)
+    await page.waitForTimeout(600)
+
+    // Start auto-play
+    await page.click('body')
+    await page.keyboard.press('Space')
+    await expect(page.getByTitle('暂停自动播放')).toBeVisible({ timeout: 3000 })
+
+    // Press ArrowRight — should stop auto-play
+    await page.keyboard.press('ArrowRight')
+    await page.waitForTimeout(300)
+
+    // Should be back to paused state
+    await expect(page.getByTitle('开始自动播放')).toBeVisible({ timeout: 3000 })
+  })
+
+  test('interval buttons are visible in menu', async ({ page }) => {
+    await page.mouse.move(640, 10)
+    await page.waitForTimeout(600)
+
+    // Interval selector buttons (3s, 5s, 8s) should be in the menu
+    const s3 = page.locator('button', { hasText: '3s' })
+    const s5 = page.locator('button', { hasText: '5s' })
+    const s8 = page.locator('button', { hasText: '8s' })
+
+    await expect(s3).toBeVisible({ timeout: 3000 })
+    await expect(s5).toBeVisible({ timeout: 3000 })
+    await expect(s8).toBeVisible({ timeout: 3000 })
+  })
+
+  test('auto-play progress indicator appears when playing', async ({ page }) => {
+    // Start auto-play
+    await page.click('body')
+    await page.keyboard.press('Space')
+
+    // The progress bar should be visible
+    await page.waitForTimeout(300)
+    const progressBar = page.locator('.absolute.bottom-24')
+    const isVisible = await progressBar.isVisible({ timeout: 3000 }).catch(() => false)
+    expect(isVisible).toBe(true)
+  })
+})
+
+// ── 7. Map Navigation (v0.4) ─────────────────────────────────────────
+
+test.describe('Map navigation', () => {
+  test.beforeEach(async ({ page, request }) => {
+    await loginViaApi(page, request)
+    await page.goto('/showcase')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('MapPin icon is in the menu', async ({ page }) => {
+    await page.mouse.move(640, 10)
+    await page.waitForTimeout(600)
+
+    const mapLink = page.getByTitle('地图')
+    await expect(mapLink).toBeVisible({ timeout: 3000 })
+  })
+
+  test('M key navigates to /map', async ({ page }) => {
+    await page.click('body')
+    await page.keyboard.press('KeyM')
+
+    await page.waitForURL('**/map', { timeout: 10000 })
+    expect(page.url()).toContain('/map')
+  })
+
+  test('MapPin click navigates to /map', async ({ page }) => {
+    const { width } = page.viewportSize()!
+    await page.mouse.move(width / 2, 10)
+    await page.waitForTimeout(600)
+
+    await page.getByTitle('地图').dispatchEvent('click')
+
+    await page.waitForURL('**/map', { timeout: 10000 })
+    expect(page.url()).toContain('/map')
+  })
+})
+
+// ── 8. Category Bar ────────────────────────────────────────────────
 
 test.describe('Category bar', () => {
   test.beforeEach(async ({ page, request }) => {
@@ -280,6 +409,67 @@ test.describe('Admin visibility', () => {
     // Should show jobs content
     const hasContent = await page.locator('text=/job|status|type/i').first().isVisible({ timeout: 5000 }).catch(() => false)
     expect(hasContent).toBe(true)
+  })
+
+  test('admin can access admin photos operations page', async ({ page }) => {
+    await page.goto('/admin/photos')
+    await page.waitForLoadState('networkidle')
+    expect(page.url()).toContain('/admin/photos')
+    await expect(page.getByText('Photo Operations')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Needs review')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('admin photo detail shows design versions and recent jobs', async ({ page, request }) => {
+    const cookie = await getSessionCookie(request)
+    const showcaseResp = await request.get(`${API_BASE}/showcase`, {
+      headers: { cookie },
+    })
+    expect(showcaseResp.status()).toBe(200)
+    const showcase = await showcaseResp.json()
+    const photoItems = Array.isArray(showcase.photos) ? showcase.photos : []
+    test.skip(!photoItems.length, 'No showcase photos available for admin detail test')
+
+    await page.goto(`/photo/${photoItems[0].photo.id}`)
+    await page.waitForLoadState('networkidle')
+
+    await expect(page.getByText('Admin Diagnostics')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Design Versions')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Recent Jobs')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('admin can activate a manual draft version from photo detail', async ({ page, request }) => {
+    const cookie = await getSessionCookie(request)
+    const showcaseResp = await request.get(`${API_BASE}/showcase`, {
+      headers: { cookie },
+    })
+    expect(showcaseResp.status()).toBe(200)
+    const showcase = await showcaseResp.json()
+    const item = Array.isArray(showcase.photos) ? showcase.photos[0] : null
+    test.skip(!item?.photo?.id, 'No showcase photo available')
+
+    const activeDesignResp = await request.get(`${API_BASE}/photos/${item.photo.id}/slide-design`, {
+      headers: { cookie },
+    })
+    expect(activeDesignResp.status()).toBe(200)
+    const activeDesign = await activeDesignResp.json()
+    const manualDesign = {
+      ...activeDesign.design_json,
+      templateId: 'minimal_white',
+    }
+
+    const createResp = await request.post(`${API_BASE}/admin/photos/${item.photo.id}/design-versions/manual`, {
+      headers: { cookie },
+      data: { design_json: manualDesign },
+    })
+    expect(createResp.status()).toBe(201)
+
+    await loginViaApi(page, request)
+    await page.goto(`/photo/${item.photo.id}`)
+    await page.waitForLoadState('networkidle')
+
+    await expect(page.getByText('Manual Design JSON')).toBeVisible({ timeout: 5000 })
+    await page.getByRole('button', { name: 'Set Active' }).first().click()
+    await expect(page.getByText(/Manual v\d+/)).toBeVisible({ timeout: 5000 })
   })
 })
 

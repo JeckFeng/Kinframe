@@ -42,6 +42,7 @@ class TestBuildSlideDesignPrompt:
         prompt = build_slide_design_prompt(
             photo_id="p1", photo_category="life",
             user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=False,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         for tid in ALLOWED_TEMPLATE_IDS:
@@ -52,6 +53,7 @@ class TestBuildSlideDesignPrompt:
         prompt = build_slide_design_prompt(
             photo_id="p1", photo_category="life",
             user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=False,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         for lt in ALLOWED_LAYER_TYPES:
@@ -62,6 +64,7 @@ class TestBuildSlideDesignPrompt:
         prompt = build_slide_design_prompt(
             photo_id="p1", photo_category="life",
             user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=False,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         assert "presetRef" in prompt
@@ -71,6 +74,7 @@ class TestBuildSlideDesignPrompt:
         prompt = build_slide_design_prompt(
             photo_id="p1", photo_category="life",
             user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=False,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         assert "caption" in prompt.lower()
@@ -81,6 +85,7 @@ class TestBuildSlideDesignPrompt:
         prompt = build_slide_design_prompt(
             photo_id="p1", photo_category="life",
             user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=False,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         assert "JSON" in prompt
@@ -91,6 +96,7 @@ class TestBuildSlideDesignPrompt:
         prompt = build_slide_design_prompt(
             photo_id="p1", photo_category="life",
             user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=False,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         assert "quality" in prompt.lower()
@@ -101,6 +107,7 @@ class TestBuildSlideDesignPrompt:
             photo_id="p1", photo_category="life",
             user_message="My exact caption text",
             taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=True,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         assert "My exact caption text" in prompt
@@ -111,6 +118,18 @@ class TestBuildSlideDesignPrompt:
         prompt = build_slide_design_prompt(
             photo_id="p1", photo_category="life",
             user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=False,
             location_summary=None, vision_result=None, prev_errors=None,
         )
         assert "do not invent" in prompt.lower() or "do NOT invent" in prompt or "no caption" in prompt.lower()
+
+    def test_ai_caption_enabled_requests_visible_caption(self):
+        """When AI caption is enabled and user_message is absent, prompt should require a caption layer."""
+        prompt = build_slide_design_prompt(
+            photo_id="p1", photo_category="life",
+            user_message=None, taken_at_str="2024-01-15T10:00:00Z",
+            ai_caption_enabled=True,
+            location_summary=None, vision_result=None, prev_errors=None,
+        )
+        assert "AI caption is enabled" in prompt
+        assert "role=caption" in prompt

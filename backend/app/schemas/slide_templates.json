@@ -1,10 +1,26 @@
 {
-  "version": "v0.1",
+  "version": "v0.3",
   "templates": [
     {
       "id": "cinematic_fullscreen",
       "name": "Cinematic Fullscreen",
+      "description": "Full-screen cinematic presentation with dark background. Suitable for landscape, travel, and dramatic photos.",
       "preferredCategories": ["photography", "travel"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape",
+        "vignetteEnabled": true,
+        "captionPlacement": "bottom-left"
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["bottom-left", "bottom-center", "center"]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 6,
       "defaultStyleTokens": {
         "--kf-background-color": "#111111",
         "--kf-text-color": "#f8fafc",
@@ -14,7 +30,23 @@
     {
       "id": "warm_memory",
       "name": "Warm Memory",
+      "description": "Warm, soft layout for family and life photos with light background.",
       "preferredCategories": ["life"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape",
+        "vignetteEnabled": false,
+        "captionPlacement": "bottom-center"
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["bottom-left", "bottom-center", "center"]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 6,
       "defaultStyleTokens": {
         "--kf-background-color": "#f7f5ef",
         "--kf-text-color": "#171717",
@@ -24,11 +56,187 @@
     {
       "id": "minimal_white",
       "name": "Minimal White",
+      "description": "Clean, minimal white-background layout for pet portraits and detailed subjects.",
       "preferredCategories": ["pet"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape",
+        "vignetteEnabled": false,
+        "captionPlacement": "bottom-center"
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["bottom-left", "bottom-center", "center"]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 6,
       "defaultStyleTokens": {
         "--kf-background-color": "#f7f5ef",
         "--kf-text-color": "#171717",
         "--kf-accent-color": "#d8b26e"
+      }
+    },
+    {
+      "id": "poetic_landscape",
+      "name": "Poetic Landscape",
+      "description": "Full-screen photo with soft gradient overlay and poetic caption placement. Suited for nature, landscapes, and outdoor scenes.",
+      "preferredCategories": ["photography", "travel"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "cover",
+        "orientation": "landscape",
+        "vignetteEnabled": true,
+        "captionPlacement": "bottom-left",
+        "photoFit": "cover",
+        "photoRadius": "0px",
+        "captionPanelEnabled": false
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["bottom-left", "bottom-center", "center"],
+        "photoFit": ["contain", "cover"],
+        "photoRadius": ["0px", "4px", "8px"],
+        "captionPanelEnabled": [true, false]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 5,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#0d1b2a",
+        "--kf-text-color": "#e0e1dd",
+        "--kf-accent-color": "#778da9"
+      }
+    },
+    {
+      "id": "magazine_left",
+      "name": "Magazine Left",
+      "description": "Photo on the left (~60% width), caption/meta panel on the right. Suited for life photos and portraits.",
+      "preferredCategories": ["life"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape",
+        "vignetteEnabled": false,
+        "captionPlacement": "center",
+        "photoFit": "contain",
+        "photoRadius": "0px",
+        "captionPanelEnabled": true
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["center", "bottom-left", "bottom-center"],
+        "photoFit": ["contain", "cover"],
+        "photoRadius": ["0px", "4px", "8px"],
+        "captionPanelEnabled": [true, false]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 5,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#faf9f6",
+        "--kf-text-color": "#2c2c2c",
+        "--kf-accent-color": "#b5838d"
+      }
+    },
+    {
+      "id": "gallery_center",
+      "name": "Gallery Center",
+      "description": "Photo centered with generous padding, museum-style presentation. Suited for photography and artistic shots.",
+      "preferredCategories": ["photography"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape",
+        "vignetteEnabled": false,
+        "captionPlacement": "bottom-center",
+        "photoFit": "contain",
+        "photoRadius": "0px",
+        "captionPanelEnabled": false
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["bottom-center", "bottom-left", "center"],
+        "photoFit": ["contain", "cover"],
+        "photoRadius": ["0px", "4px", "8px"],
+        "captionPanelEnabled": [true, false]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 4,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#f5f5f0",
+        "--kf-text-color": "#1a1a1a",
+        "--kf-accent-color": "#6b6b6b"
+      }
+    },
+    {
+      "id": "dark_exhibition",
+      "name": "Dark Exhibition",
+      "description": "Dark background with subtle photo glow/border, dramatic presentation. Suited for night scenes and dramatic compositions.",
+      "preferredCategories": ["photography", "travel"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape",
+        "vignetteEnabled": true,
+        "captionPlacement": "center",
+        "photoFit": "contain",
+        "photoRadius": "4px",
+        "captionPanelEnabled": true
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["center", "bottom-left", "bottom-center"],
+        "photoFit": ["contain", "cover"],
+        "photoRadius": ["0px", "4px", "8px"],
+        "captionPanelEnabled": [true, false]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 5,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#0a0a0a",
+        "--kf-text-color": "#d4d4d4",
+        "--kf-accent-color": "#c9a96e"
+      }
+    },
+    {
+      "id": "pet_portrait",
+      "name": "Pet Portrait",
+      "description": "Photo prominently centered with warm tones and rounded photo frame. Suited for pet close-ups.",
+      "preferredCategories": ["pet"],
+      "aspectRatios": ["16:9"],
+      "defaultParams": {
+        "imageFit": "contain",
+        "orientation": "landscape",
+        "vignetteEnabled": false,
+        "captionPlacement": "bottom-center",
+        "photoFit": "contain",
+        "photoRadius": "16px",
+        "captionPanelEnabled": false
+      },
+      "paramSchema": {
+        "imageFit": ["contain", "cover"],
+        "orientation": ["landscape", "portrait"],
+        "vignetteEnabled": [true, false],
+        "captionPlacement": ["bottom-center", "bottom-left", "center"],
+        "photoFit": ["contain", "cover"],
+        "photoRadius": ["0px", "8px", "16px", "24px"],
+        "captionPanelEnabled": [true, false]
+      },
+      "allowedLayerTypes": ["shape", "image", "text", "timeline", "background", "mask"],
+      "maxExtraLayers": 5,
+      "defaultStyleTokens": {
+        "--kf-background-color": "#fef9ef",
+        "--kf-text-color": "#3d2c2c",
+        "--kf-accent-color": "#d4a574"
       }
     }
   ]

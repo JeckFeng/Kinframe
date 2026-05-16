@@ -42,7 +42,6 @@ export interface Photo {
   ai_caption: string | null
   final_caption: string | null
   ai_category_suggestion: string | null
-  ai_analysis_json: Record<string, unknown> | null
   ai_caption_enabled: boolean
   ai_category_enabled: boolean
   include_in_showcase: boolean
@@ -62,7 +61,6 @@ export interface Photo {
   gps_lng: number | null
   camera_make: string | null
   camera_model: string | null
-  exif_json: Record<string, unknown> | null
   location_name: string | null
   location_country: string | null
   location_region: string | null
@@ -71,7 +69,6 @@ export interface Photo {
   location_road: string | null
   geocoding_status: string
   geocoding_provider: string | null
-  geocoding_error: string | null
   geocoded_at: string | null
   status: PhotoStatus
   processing_message: string | null
@@ -93,6 +90,9 @@ export interface PhotoProcessingStatusResponse {
   error_message: string | null
   slide_design_status: string | null
   slide_design_source: string | null
+  ai_provider: string | null
+  ai_model: string | null
+  geocoding_status: string | null
 }
 
 export interface PhotoBatchUploadItem {
@@ -139,6 +139,10 @@ export interface AdminJobItem {
   attempts: number
   max_attempts: number
   error_message: string | null
+  ai_provider: string | null
+  ai_model: string | null
+  ai_prompt_version: string | null
+  ai_raw_summary: string | null
   started_at: string | null
   finished_at: string | null
   created_at: string
@@ -182,8 +186,94 @@ export interface AdminPhoto {
   geocoding_error: string | null
   geocoded_at: string | null
   status: string
+  active_design_source: 'fallback' | 'ai' | 'manual' | null
+  active_design_version: number | null
+  latest_job_type: string | null
+  latest_job_status: string | null
+  latest_job_error: string | null
+  ai_status: 'missing' | 'analyzed' | 'failed'
+  has_failed_jobs: boolean
+  needs_review: boolean
+  design_versions: AdminPhotoDesignVersion[]
+  recent_jobs: AdminPhotoJobSummary[]
+  recent_audit_logs: AdminPhotoAuditLog[]
   created_at: string
   updated_at: string
+}
+
+export interface QualityReport {
+  total_score: number
+  passed: boolean
+  failures: string[]
+}
+
+export interface AdminPhotoDesignVersion {
+  id: string
+  version: number
+  source: 'fallback' | 'ai' | 'manual'
+  status: 'draft' | 'active' | 'failed'
+  design_json: Record<string, unknown> | null
+  template_id: string | null
+  layer_count: number
+  quality_report: QualityReport | null
+  validation_errors: string[] | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminPhotoJobSummary {
+  id: string
+  job_type: string
+  status: string
+  attempts: number
+  max_attempts: number
+  error_message: string | null
+  ai_provider: string | null
+  ai_model: string | null
+  ai_prompt_version: string | null
+  ai_raw_summary: string | null
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+}
+
+export interface AdminPhotoAuditLog {
+  id: string
+  action: string
+  target_type: string
+  target_id: string | null
+  summary: string | null
+  detail: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface AdminPhotoListItem {
+  id: string
+  owner_id: string
+  category: string
+  final_caption: string | null
+  user_message: string | null
+  status: string
+  uploaded_at: string
+  taken_at: string
+  location_name: string | null
+  location_city: string | null
+  geocoding_status: string
+  ai_status: 'missing' | 'analyzed' | 'failed'
+  active_design_source: 'fallback' | 'ai' | 'manual' | null
+  active_design_version: number | null
+  latest_job_type: string | null
+  latest_job_status: string | null
+  latest_job_error: string | null
+  has_failed_jobs: boolean
+  needs_review: boolean
+}
+
+export interface AdminPhotoListResponse {
+  items: AdminPhotoListItem[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export interface AdminCategory {
@@ -213,4 +303,24 @@ export interface AuditLogListResponse {
   total: number
   limit: number
   offset: number
+}
+
+export interface MapPhotoItem {
+  photo_id: string
+  preview_url: string
+  thumbnail_url: string
+  category: string
+  gps_lat: number
+  gps_lng: number
+  location_name: string | null
+  location_city: string | null
+  location_region: string | null
+  location_country: string | null
+  location_district: string | null
+  final_caption: string | null
+  taken_at: string | null
+}
+
+export interface MapPhotosResponse {
+  photos: MapPhotoItem[]
 }

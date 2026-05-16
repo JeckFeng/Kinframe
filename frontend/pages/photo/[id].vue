@@ -33,6 +33,11 @@ const adminLocationRoad = ref('')
 const adminSaving = ref(false)
 const adminRegenerating = ref(false)
 const adminResettingCaption = ref(false)
+const manualDesignJson = ref('')
+const manualDesignSaving = ref(false)
+const activatingDesignId = ref<string | null>(null)
+type RegenerateScope = 'caption' | 'template' | 'css_tokens' | 'full' | 'fallback'
+const regenScope = ref<RegenerateScope>('full')
 
 const editingMessage = ref(false)
 const messageSaving = ref(false)
@@ -49,13 +54,48 @@ const STATUS_LABELS: Record<string, string> = {
   ready: '已完成 ✓',
   failed: '处理失败',
 }
+const ADMIN_JOB_TYPE_LABELS: Record<string, string> = {
+  photo_ingest: 'Photo Ingest',
+  reverse_geocode: 'Reverse Geocode',
+  vision_analyze: 'Vision Analyze',
+  slide_design_generate: 'Slide Design',
+  caption_regenerate: 'Caption Regenerate',
+  template_regenerate: 'Template Regenerate',
+  css_regenerate: 'CSS Regenerate',
+  fallback_regenerate: 'Fallback Regenerate',
+}
+const DESIGN_SOURCE_LABELS: Record<string, string> = {
+  fallback: 'Fallback',
+  ai: 'AI',
+  manual: 'Manual',
+}
+const AI_STATUS_LABELS: Record<string, string> = {
+  analyzed: 'Analyzed',
+  failed: 'Failed',
+  missing: 'Missing',
+}
 
 function formatStatus(status: string): string {
   return STATUS_LABELS[status] || status
 }
 
+function formatAdminJobType(type: string): string {
+  return ADMIN_JOB_TYPE_LABELS[type] || type
+}
+
+function syncManualDesignEditor(force = false) {
+  if (!adminPhoto.value?.design_versions.length) return
+  if (manualDesignJson.value && !force) return
+  const preferredDesign = adminPhoto.value.design_versions.find((design) => design.status === 'active') || adminPhoto.value.design_versions[0]
+  manualDesignJson.value = preferredDesign.design_json ? JSON.stringify(preferredDesign.design_json, null, 2) : ''
+}
+
 function isInProgressStatus(status: string) {
   return !['ready', 'failed'].includes(status)
+}
+
+function hasActiveJob(status: PhotoProcessingStatusResponse | null) {
+  return status?.job_status === 'pending' || status?.job_status === 'running'
 }
 
 function stopProcessingPoll() {
@@ -69,7 +109,7 @@ async function refreshProcessingStatus() {
   if (!photo.value) return
   const status = await apiFetch<PhotoProcessingStatusResponse>(`/photos/${photo.value.id}/processing-status`)
   processingStatus.value = status
-  if (!isInProgressStatus(status.photo_status)) {
+  if (!isInProgressStatus(status.photo_status) && !hasActiveJob(status)) {
     stopProcessingPoll()
     await loadPhoto(false)
   }
@@ -124,6 +164,7 @@ async function loadAdminPhoto(id: string) {
     adminLocationRegion.value = adminPhoto.value.location_region || ''
     adminLocationDistrict.value = adminPhoto.value.location_district || ''
     adminLocationRoad.value = adminPhoto.value.location_road || ''
+    syncManualDesignEditor(true)
   } catch {
     // Admin data not critical
   }
@@ -216,14 +257,78 @@ async function resetCaption() {
 
 async function regenerateDesign() {
   if (!photo.value) return
+  const labels: Record<RegenerateScope, string> = {
+    caption: 'Regenerate Caption Only',
+    template: 'Regenerate Template Only',
+    css_tokens: 'Regenerate CSS Tokens Only',
+    full: 'Regenerate Full Design',
+    fallback: 'Reset to Deterministic Fallback',
+  }
+  if (process.client && !window.confirm(`Confirm: ${labels[regenScope.value]}?`)) {
+    return
+  }
   adminRegenerating.value = true
   try {
-    await apiFetch(`/admin/photos/${photo.value.id}/regenerate-design`, { method: 'POST' })
-    successMessage.value = 'Slide design regeneration queued'
+    await apiFetch(`/admin/photos/${photo.value.id}/regenerate`, {
+      method: 'POST',
+      body: { scope: regenScope.value },
+    })
+    successMessage.value = 'Regeneration queued'
+    await refreshProcessingStatus()
+    startProcessingPoll()
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error)
   } finally {
     adminRegenerating.value = false
+  }
+}
+
+function loadDesignJsonIntoEditor(designJson: Record<string, unknown> | null) {
+  if (!designJson) return
+  manualDesignJson.value = JSON.stringify(designJson, null, 2)
+  successMessage.value = 'Loaded design JSON into editor'
+}
+
+async function saveManualDesignDraft() {
+  if (!photo.value) return
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(manualDesignJson.value) as Record<string, unknown>
+  } catch {
+    errorMessage.value = 'Manual design JSON is invalid'
+    return
+  }
+
+  manualDesignSaving.value = true
+  errorMessage.value = ''
+  try {
+    adminPhoto.value = await apiFetch<AdminPhoto>(`/admin/photos/${photo.value.id}/design-versions/manual`, {
+      method: 'POST',
+      body: { design_json: parsed },
+    })
+    successMessage.value = 'Manual draft saved'
+    syncManualDesignEditor()
+  } catch (error) {
+    errorMessage.value = getApiErrorMessage(error)
+  } finally {
+    manualDesignSaving.value = false
+  }
+}
+
+async function activateDesignVersion(designId: string) {
+  if (!photo.value) return
+  activatingDesignId.value = designId
+  errorMessage.value = ''
+  try {
+    adminPhoto.value = await apiFetch<AdminPhoto>(`/admin/photos/${photo.value.id}/design-versions/${designId}/activate`, {
+      method: 'POST',
+    })
+    await loadPhoto(false)
+    successMessage.value = 'Active design updated'
+  } catch (error) {
+    errorMessage.value = getApiErrorMessage(error)
+  } finally {
+    activatingDesignId.value = null
   }
 }
 
@@ -460,6 +565,25 @@ onBeforeUnmount(stopProcessingPoll)
             Category source: <span class="font-medium">{{ adminPhoto.category_source }}</span>
           </div>
 
+          <div class="mb-3 grid grid-cols-3 gap-2 text-xs">
+            <div class="rounded-md border border-amber-200 bg-white px-2 py-2">
+              <p class="text-stone-500">AI Status</p>
+              <p class="font-medium text-stone-800">{{ AI_STATUS_LABELS[adminPhoto.ai_status] || adminPhoto.ai_status }}</p>
+            </div>
+            <div class="rounded-md border border-amber-200 bg-white px-2 py-2">
+              <p class="text-stone-500">Active Design</p>
+              <p class="font-medium text-stone-800">
+                {{ adminPhoto.active_design_source ? `${DESIGN_SOURCE_LABELS[adminPhoto.active_design_source] || adminPhoto.active_design_source} v${adminPhoto.active_design_version}` : 'None' }}
+              </p>
+            </div>
+            <div class="rounded-md border border-amber-200 bg-white px-2 py-2">
+              <p class="text-stone-500">Attention</p>
+              <p class="font-medium" :class="adminPhoto.needs_review ? 'text-amber-700' : 'text-emerald-700'">
+                {{ adminPhoto.needs_review ? 'Needs review' : 'Healthy' }}
+              </p>
+            </div>
+          </div>
+
           <!-- Admin Actions -->
           <div class="flex flex-wrap gap-2 border-t border-amber-200 pt-3">
             <button
@@ -471,15 +595,152 @@ onBeforeUnmount(stopProcessingPoll)
               <Save class="h-3.5 w-3.5" />
               {{ adminSaving ? 'Saving…' : 'Save Admin Changes' }}
             </button>
+            <select
+              v-model="regenScope"
+              class="focus-ring rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700"
+              :disabled="adminRegenerating || hasActiveJob(processingStatus)"
+            >
+              <option value="caption">Caption only</option>
+              <option value="template">Template only</option>
+              <option value="css_tokens">CSS tokens only</option>
+              <option value="full">Full design</option>
+              <option value="fallback">Deterministic fallback</option>
+            </select>
             <button
               type="button"
               class="focus-ring inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 disabled:opacity-50"
-              :disabled="adminRegenerating"
+              :disabled="adminRegenerating || hasActiveJob(processingStatus)"
               @click="regenerateDesign"
             >
               <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': adminRegenerating }" />
-              {{ adminRegenerating ? 'Queuing…' : 'Regen Slide Design' }}
+              {{ adminRegenerating ? 'Queuing…' : 'Run Regeneration' }}
             </button>
+          </div>
+          <p v-if="hasActiveJob(processingStatus)" class="mt-3 text-xs text-stone-600">
+            Latest job: {{ processingStatus?.job_type }} / {{ processingStatus?.job_status }}
+          </p>
+
+          <div v-if="adminPhoto.design_versions.length" class="mt-4 border-t border-amber-200 pt-3">
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">Design Versions</h3>
+            <div class="space-y-2">
+              <div
+                v-for="design in adminPhoto.design_versions"
+                :key="design.id"
+                class="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <p class="font-medium text-stone-800">
+                    v{{ design.version }} · {{ DESIGN_SOURCE_LABELS[design.source] || design.source }} · {{ design.status }}
+                  </p>
+                  <span class="text-stone-500">{{ formatDate(design.created_at) }}</span>
+                </div>
+                <p class="mt-1 text-stone-600">
+                  {{ design.template_id || 'unknown template' }} · {{ design.layer_count }} layers
+                </p>
+                <p v-if="design.quality_report" class="mt-1" :class="design.quality_report.passed ? 'text-emerald-700' : 'text-red-700'">
+                  Quality {{ design.quality_report.total_score }}/5
+                  <span v-if="design.quality_report.failures.length"> · {{ design.quality_report.failures.join('; ') }}</span>
+                </p>
+                <p v-if="design.validation_errors?.length" class="mt-1 text-red-700">
+                  {{ design.validation_errors.join('; ') }}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="focus-ring rounded-md border border-stone-300 bg-white px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100"
+                    @click="loadDesignJsonIntoEditor(design.design_json)"
+                  >
+                    Load JSON
+                  </button>
+                  <button
+                    v-if="design.status !== 'active'"
+                    type="button"
+                    class="focus-ring rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-200 disabled:opacity-50"
+                    :disabled="activatingDesignId === design.id"
+                    @click="activateDesignVersion(design.id)"
+                  >
+                    {{ activatingDesignId === design.id ? 'Switching…' : 'Set Active' }}
+                  </button>
+                  <span
+                    v-else
+                    class="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800"
+                  >
+                    Active
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 border-t border-amber-200 pt-3">
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-stone-600">Manual Design JSON</h3>
+              <button
+                type="button"
+                class="focus-ring rounded-md border border-stone-300 bg-white px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100"
+                @click="syncManualDesignEditor(true)"
+              >
+                Reset Editor
+              </button>
+            </div>
+            <textarea
+              v-model="manualDesignJson"
+              class="focus-ring min-h-56 w-full rounded-md border border-stone-300 bg-white px-3 py-2 font-mono text-xs text-stone-800"
+              spellcheck="false"
+            />
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                :disabled="manualDesignSaving"
+                @click="saveManualDesignDraft"
+              >
+                <Save class="h-3.5 w-3.5" />
+                {{ manualDesignSaving ? 'Saving…' : 'Save Manual Draft' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="adminPhoto.recent_jobs.length" class="mt-4 border-t border-amber-200 pt-3">
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-stone-600">Recent Jobs</h3>
+              <NuxtLink :to="`/admin/jobs?photo_id=${adminPhoto.id}`" class="text-xs font-medium text-moss hover:underline">
+                View all
+              </NuxtLink>
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="job in adminPhoto.recent_jobs"
+                :key="job.id"
+                class="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <p class="font-medium text-stone-800">{{ formatAdminJobType(job.job_type) }}</p>
+                  <span class="text-stone-500">{{ job.status }}</span>
+                </div>
+                <p class="mt-1 text-stone-600">
+                  {{ job.ai_provider || 'system' }}{{ job.ai_model ? ` · ${job.ai_model}` : '' }}{{ job.ai_prompt_version ? ` · ${job.ai_prompt_version}` : '' }}
+                </p>
+                <p v-if="job.error_message" class="mt-1 text-red-700">{{ job.error_message }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="adminPhoto.recent_audit_logs.length" class="mt-4 border-t border-amber-200 pt-3">
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">Recent Audit</h3>
+            <div class="space-y-2">
+              <div
+                v-for="entry in adminPhoto.recent_audit_logs"
+                :key="entry.id"
+                class="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <p class="font-medium text-stone-800">{{ entry.action }}</p>
+                  <span class="text-stone-500">{{ formatDate(entry.created_at) }}</span>
+                </div>
+                <p class="mt-1 text-stone-600">{{ entry.summary || 'No summary' }}</p>
+              </div>
+            </div>
           </div>
         </div>
       </aside>

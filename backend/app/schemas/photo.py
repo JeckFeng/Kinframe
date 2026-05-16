@@ -117,6 +117,17 @@ class PhotoAdminRead(BaseModel):
     geocoded_at: datetime | None = None
     status: str
     processing_message: str | None = None
+    active_design_source: Literal["fallback", "ai", "manual"] | None = None
+    active_design_version: int | None = None
+    latest_job_type: str | None = None
+    latest_job_status: str | None = None
+    latest_job_error: str | None = None
+    ai_status: Literal["missing", "analyzed", "failed"] = "missing"
+    has_failed_jobs: bool = False
+    needs_review: bool = False
+    design_versions: list["SlideDesignSummaryRead"] = Field(default_factory=list)
+    recent_jobs: list["AdminPhotoJobRead"] = Field(default_factory=list)
+    recent_audit_logs: list["AdminAuditLogRead"] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -220,6 +231,39 @@ class SlideDesignCreate(BaseModel):
         return validate_slide_design_data(value)
 
 
+class ManualSlideDesignCreate(BaseModel):
+    """Payload for storing a manual slide design draft or active version."""
+
+    design_json: dict[str, Any]
+    activate: bool = False
+
+
+class MapPhotoItem(BaseModel):
+    """Single photo record for map marker rendering."""
+
+    photo_id: str
+    preview_url: str
+    thumbnail_url: str
+    category: str
+    gps_lat: float
+    gps_lng: float
+    location_name: str | None = None
+    location_city: str | None = None
+    location_region: str | None = None
+    location_country: str | None = None
+    location_district: str | None = None
+    final_caption: str | None = None
+    taken_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MapPhotosResponse(BaseModel):
+    """Response wrapper for map photo list."""
+
+    photos: list[MapPhotoItem]
+
+
 class SlideDesignRead(BaseModel):
     """Slide design returned by photo APIs."""
 
@@ -232,5 +276,82 @@ class SlideDesignRead(BaseModel):
     validation_errors: list[str] | None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class QualityReportRead(BaseModel):
+    total_score: int
+    passed: bool
+    failures: list[str] = Field(default_factory=list)
+
+
+class SlideDesignSummaryRead(BaseModel):
+    id: str
+    version: int
+    source: Literal["fallback", "ai", "manual"]
+    status: Literal["draft", "active", "failed"]
+    design_json: dict[str, Any] | None = None
+    template_id: str | None = None
+    layer_count: int = 0
+    quality_report: QualityReportRead | None = None
+    validation_errors: list[str] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminPhotoJobRead(BaseModel):
+    id: str
+    job_type: str
+    status: str
+    attempts: int
+    max_attempts: int
+    error_message: str | None = None
+    ai_provider: str | None = None
+    ai_model: str | None = None
+    ai_prompt_version: str | None = None
+    ai_raw_summary: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    created_at: datetime
+
+
+class AdminAuditLogRead(BaseModel):
+    id: str
+    action: str
+    target_type: str
+    target_id: str | None = None
+    summary: str | None = None
+    detail: dict | None = None
+    created_at: datetime
+
+
+class AdminPhotoListItem(BaseModel):
+    id: str
+    owner_id: str
+    category: PhotoCategory
+    final_caption: str | None = None
+    user_message: str | None = None
+    status: str
+    uploaded_at: datetime
+    taken_at: datetime
+    location_name: str | None = None
+    location_city: str | None = None
+    geocoding_status: str = "not_applicable"
+    ai_status: Literal["missing", "analyzed", "failed"] = "missing"
+    active_design_source: Literal["fallback", "ai", "manual"] | None = None
+    active_design_version: int | None = None
+    latest_job_type: str | None = None
+    latest_job_status: str | None = None
+    latest_job_error: str | None = None
+    has_failed_jobs: bool = False
+    needs_review: bool = False
+
+
+class AdminPhotoListResponse(BaseModel):
+    items: list[AdminPhotoListItem]
+    total: int
+    limit: int
+    offset: int
 
     model_config = ConfigDict(from_attributes=True)

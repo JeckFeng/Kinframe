@@ -5,7 +5,12 @@ const username = ref('')
 const password = ref('')
 const errorMessage = ref('')
 const pending = ref(false)
+const hydrated = ref(false)
 const { login } = useAuth()
+
+onMounted(() => {
+  hydrated.value = true
+})
 
 async function submitLogin() {
   errorMessage.value = ''
@@ -62,7 +67,7 @@ async function submitLogin() {
       <button
         type="submit"
         class="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-md bg-moss px-4 py-2 font-medium text-white hover:bg-moss/90 disabled:cursor-not-allowed disabled:opacity-60"
-        :disabled="pending"
+        :disabled="pending || !hydrated"
       >
         <LogIn class="h-4 w-4" aria-hidden="true" />
         {{ pending ? 'Signing in' : 'Sign in' }}

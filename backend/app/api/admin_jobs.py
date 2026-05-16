@@ -3,14 +3,14 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import DbSession, get_current_admin
 from app.models import Photo, PhotoProcessingJob, User
+from app.services.audit_logs import create_audit_log
 from app.services.photo_jobs import (
     PHOTO_JOB_STATUS_PENDING,
-    get_latest_job_for_photo,
 )
 from app.services.photos import get_photo
 
@@ -27,6 +27,10 @@ class AdminJobItem(BaseModel):
     attempts: int
     max_attempts: int
     error_message: str | None
+    ai_provider: str | None
+    ai_model: str | None
+    ai_prompt_version: str | None
+    ai_raw_summary: str | None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
@@ -45,17 +49,29 @@ class AdminJobItem(BaseModel):
 def get_jobs(
     db: DbSession,
     _admin: Annotated[User, Depends(get_current_admin)],
+    photo_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    job_type: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
 ) -> list[AdminJobItem]:
     """List all processing jobs with photo metadata, newest first."""
 
     from sqlalchemy import select
 
-    rows = db.execute(
+    stmt = (
         select(PhotoProcessingJob, Photo)
         .join(Photo, PhotoProcessingJob.photo_id == Photo.id)
         .order_by(PhotoProcessingJob.created_at.desc())
-        .limit(200)
-    ).all()
+    )
+    if photo_id:
+        stmt = stmt.where(PhotoProcessingJob.photo_id == photo_id)
+    if status:
+        stmt = stmt.where(PhotoProcessingJob.status == status)
+    if job_type:
+        stmt = stmt.where(PhotoProcessingJob.job_type == job_type)
+    stmt = stmt.limit(limit)
+
+    rows = db.execute(stmt).all()
 
     return [
         AdminJobItem(
@@ -66,6 +82,10 @@ def get_jobs(
             attempts=job.attempts,
             max_attempts=job.max_attempts,
             error_message=job.error_message,
+            ai_provider=job.ai_provider,
+            ai_model=job.ai_model,
+            ai_prompt_version=job.ai_prompt_version,
+            ai_raw_summary=job.ai_raw_summary,
             started_at=job.started_at,
             finished_at=job.finished_at,
             created_at=job.created_at,
@@ -85,7 +105,7 @@ def get_jobs(
 def retry_job(
     job_id: str,
     db: DbSession,
-    _admin: Annotated[User, Depends(get_current_admin)],
+    admin: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
     """Retry a failed job by resetting it to pending."""
 
@@ -110,4 +130,16 @@ def retry_job(
         db.add(photo)
 
     db.commit()
+    create_audit_log(
+        db,
+        admin_id=admin.id,
+        action="job.retry",
+        target_type="job",
+        target_id=job.id,
+        detail={
+            "job_type": job.job_type,
+            "photo_id": job.photo_id,
+            "summary": f"Admin {admin.username} reset job to pending",
+        },
+    )
     return {"message": "Job reset to pending"}

@@ -40,11 +40,11 @@ const displayContent = computed(() => {
 <template>
   <div
     v-if="displayContent"
-    class="kf-layer kf-layer--text"
+    class="kf-layer kf-layer--text kf-text-layer"
     :data-layer-id="layer.id || ''"
     :style="textStyle"
   >
-    <p class="kf-text-content">{{ displayContent }}</p>
+    <p :class="['kf-text-content', layer.role === 'caption' ? 'kf-caption' : null]">{{ displayContent }}</p>
   </div>
 </template>
 

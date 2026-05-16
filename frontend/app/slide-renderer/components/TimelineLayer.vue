@@ -29,7 +29,7 @@ const displayLocation = computed(() => props.locationText || props.layer.locatio
 
 <template>
   <div
-    class="kf-layer kf-layer--timeline"
+    class="kf-layer kf-layer--timeline kf-timeline-layer"
     :data-layer-id="layer.id || ''"
     :style="timelineStyle"
   >
@@ -44,7 +44,7 @@ const displayLocation = computed(() => props.locationText || props.layer.locatio
       />
     </div>
     <span v-if="displayLabel" class="kf-timeline-label">{{ displayLabel }}</span>
-    <div v-if="displayTime || displayLocation" class="kf-timeline-meta">
+    <div v-if="displayTime || displayLocation" class="kf-timeline-meta kf-meta">
       <span v-if="displayTime" class="kf-timeline-time">{{ displayTime }}</span>
       <span v-if="displayLocation" class="kf-timeline-location">{{ displayLocation }}</span>
     </div>

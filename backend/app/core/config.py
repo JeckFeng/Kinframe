@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     minio_endpoint: str = "localhost:9000"
+    minio_public_endpoint: str | None = None
     minio_access_key: str = "kinframe"
     minio_secret_key: str = "change-me"
     minio_bucket: str = "kinframe-photos"

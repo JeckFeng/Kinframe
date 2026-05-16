@@ -2,6 +2,7 @@
 import { RefreshCw, RotateCcw } from 'lucide-vue-next'
 import type { AdminJobItem } from '~/types/api'
 
+const route = useRoute()
 const { apiFetch } = useApi()
 const { formatDate } = useFormat()
 
@@ -10,6 +11,9 @@ const pending = ref(true)
 const errorMessage = ref('')
 const successMessage = ref('')
 const retrying = ref<string | null>(null)
+const statusFilter = ref('')
+const jobTypeFilter = ref('')
+const photoIdFilter = ref('')
 
 const STATUS_LABELS: Record<string, string> = {
   pending: '等待处理',
@@ -22,6 +26,10 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   slide_design_generate: '幻灯片生成',
   reverse_geocode: '反向地理编码',
   vision_analyze: 'AI 视觉分析',
+  caption_regenerate: '文案重生成',
+  template_regenerate: '模板重生成',
+  css_regenerate: '样式重生成',
+  fallback_regenerate: '兜底重生成',
 }
 
 function formatJobStatus(status: string): string {
@@ -36,7 +44,12 @@ async function loadJobs() {
   pending.value = true
   errorMessage.value = ''
   try {
-    jobs.value = await apiFetch<AdminJobItem[]>('/admin/jobs')
+    const params = new URLSearchParams()
+    if (statusFilter.value) params.set('status', statusFilter.value)
+    if (jobTypeFilter.value) params.set('job_type', jobTypeFilter.value)
+    if (photoIdFilter.value.trim()) params.set('photo_id', photoIdFilter.value.trim())
+    const query = params.toString()
+    jobs.value = await apiFetch<AdminJobItem[]>(`/admin/jobs${query ? `?${query}` : ''}`)
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error)
   } finally {
@@ -59,7 +72,12 @@ async function retryJob(jobId: string) {
   }
 }
 
-onMounted(loadJobs)
+onMounted(() => {
+  statusFilter.value = typeof route.query.status === 'string' ? route.query.status : ''
+  jobTypeFilter.value = typeof route.query.job_type === 'string' ? route.query.job_type : ''
+  photoIdFilter.value = typeof route.query.photo_id === 'string' ? route.query.photo_id : ''
+  loadJobs()
+})
 </script>
 
 <template>
@@ -79,6 +97,50 @@ onMounted(loadJobs)
       </button>
     </div>
 
+    <div class="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]">
+      <label class="space-y-1 text-sm">
+        <span class="text-stone-600">Status</span>
+        <select v-model="statusFilter" class="focus-ring w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="running">Running</option>
+          <option value="succeeded">Succeeded</option>
+          <option value="failed">Failed</option>
+        </select>
+      </label>
+      <label class="space-y-1 text-sm">
+        <span class="text-stone-600">Job Type</span>
+        <select v-model="jobTypeFilter" class="focus-ring w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700">
+          <option value="">All</option>
+          <option value="photo_ingest">Photo Ingest</option>
+          <option value="reverse_geocode">Reverse Geocode</option>
+          <option value="vision_analyze">Vision Analyze</option>
+          <option value="slide_design_generate">Slide Design</option>
+          <option value="caption_regenerate">Caption Regenerate</option>
+          <option value="template_regenerate">Template Regenerate</option>
+          <option value="css_regenerate">CSS Regenerate</option>
+          <option value="fallback_regenerate">Fallback Regenerate</option>
+        </select>
+      </label>
+      <label class="space-y-1 text-sm">
+        <span class="text-stone-600">Photo ID</span>
+        <input
+          v-model="photoIdFilter"
+          type="text"
+          class="focus-ring w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700"
+          placeholder="Filter one photo"
+          @keyup.enter="loadJobs"
+        >
+      </label>
+      <button
+        type="button"
+        class="focus-ring inline-flex items-center justify-center rounded-md bg-moss px-3 py-2 text-sm font-medium text-white hover:bg-moss/90"
+        @click="loadJobs"
+      >
+        Apply
+      </button>
+    </div>
+
     <p v-if="errorMessage" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
       {{ errorMessage }}
     </p>
@@ -95,6 +157,7 @@ onMounted(loadJobs)
             <th class="px-3 py-3 font-semibold">Photo</th>
             <th class="px-3 py-3 font-semibold">Status</th>
             <th class="px-3 py-3 font-semibold">Attempts</th>
+            <th class="px-3 py-3 font-semibold">AI</th>
             <th class="px-3 py-3 font-semibold">Error</th>
             <th class="px-3 py-3 font-semibold">Created</th>
             <th class="px-3 py-3 font-semibold">Actions</th>
@@ -102,10 +165,10 @@ onMounted(loadJobs)
         </thead>
         <tbody class="divide-y divide-stone-100">
           <tr v-if="pending">
-            <td class="px-3 py-4 text-stone-600" colspan="8">Loading jobs</td>
+            <td class="px-3 py-4 text-stone-600" colspan="9">Loading jobs</td>
           </tr>
           <tr v-else-if="!jobs.length">
-            <td class="px-3 py-4 text-stone-600" colspan="8">No jobs</td>
+            <td class="px-3 py-4 text-stone-600" colspan="9">No jobs</td>
           </tr>
           <tr v-for="job in jobs" v-else :key="job.id" :class="job.status === 'failed' ? 'bg-red-50/40' : ''">
             <td class="px-3 py-3 font-mono text-xs">{{ job.id.slice(0, 8) }}…</td>
@@ -128,6 +191,13 @@ onMounted(loadJobs)
               </span>
             </td>
             <td class="px-3 py-3">{{ job.attempts }} / {{ job.max_attempts }}</td>
+            <td class="px-3 py-3 text-xs text-stone-600">
+              <div v-if="job.ai_provider || job.ai_model">
+                <p>{{ job.ai_provider || 'AI' }}</p>
+                <p class="text-stone-500">{{ job.ai_model || job.ai_prompt_version || '-' }}</p>
+              </div>
+              <span v-else>-</span>
+            </td>
             <td class="px-3 py-3 max-w-48 truncate text-xs text-red-600">{{ job.error_message || '-' }}</td>
             <td class="px-3 py-3 whitespace-nowrap">{{ formatDate(job.created_at) }}</td>
             <td class="px-3 py-3">

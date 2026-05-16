@@ -113,6 +113,7 @@ async def _upload_one_photo(
     file: UploadFile,
     *,
     category: str,
+    category_provided: bool,
     user_message: str | None,
     ai_caption_enabled: bool,
     ai_category_enabled: bool,
@@ -154,6 +155,7 @@ async def _upload_one_photo(
         id=photo_id,
         owner_id=current_user.id,
         category=category,
+        category_source="user" if category_provided else "fallback",
         user_message=user_message,
         ai_caption=None,
         final_caption=user_message,
@@ -211,6 +213,7 @@ async def upload_photo(
 ) -> PhotoRead:
     """Upload a photo original and enqueue asynchronous processing."""
 
+    category_provided = bool(category)
     category = _validate_category(category, db)
     try:
         return await _upload_one_photo(
@@ -220,6 +223,7 @@ async def upload_photo(
             storage,
             file,
             category=category,
+            category_provided=category_provided,
             user_message=user_message,
             ai_caption_enabled=ai_caption_enabled,
             ai_category_enabled=ai_category_enabled,
@@ -244,6 +248,7 @@ async def batch_upload_photos(
 ) -> PhotoBatchUploadResponse:
     """Upload up to 10 photos and return independent per-file results."""
 
+    category_provided = bool(category)
     category = _validate_category(category, db)
     if len(files) > BATCH_UPLOAD_MAX_FILES:
         raise HTTPException(
@@ -262,6 +267,7 @@ async def batch_upload_photos(
                 storage,
                 file,
                 category=category,
+                category_provided=category_provided,
                 user_message=user_message,
                 ai_caption_enabled=ai_caption_enabled,
                 ai_category_enabled=ai_category_enabled,

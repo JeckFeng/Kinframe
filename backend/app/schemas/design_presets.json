@@ -1,0 +1,54 @@
+{
+  "version": "v0.3",
+  "description": "Curated design presets for AI slide design generation. Each preset can be referenced by ID from a slide design layer via presetRef field.",
+  "palettes": {
+    "warm_amber_glow": { "name": "Warm Amber Glow", "mood": "warm, nostalgic", "colors": { "background": "#2c1810", "text": "#f5e6d3", "accent": "#d4a574", "overlay": "#4a2c17" }},
+    "misty_mountain_blue": { "name": "Misty Mountain Blue", "mood": "calm, serene", "colors": { "background": "#0d1b2a", "text": "#e0e1dd", "accent": "#778da9", "overlay": "#1b2838" }},
+    "golden_hour": { "name": "Golden Hour", "mood": "bright, joyful", "colors": { "background": "#1a1410", "text": "#fef3c7", "accent": "#f59e0b", "overlay": "#3d2e1a" }},
+    "soft_blush": { "name": "Soft Blush", "mood": "tender, romantic", "colors": { "background": "#2d1a1c", "text": "#fce4e4", "accent": "#e8a0a0", "overlay": "#4a282c" }},
+    "forest_depth": { "name": "Forest Depth", "mood": "natural, grounded", "colors": { "background": "#1a2416", "text": "#e8ecd6", "accent": "#7a9a5b", "overlay": "#2a3422" }},
+    "ocean_dusk": { "name": "Ocean Dusk", "mood": "deep, contemplative", "colors": { "background": "#0c1924", "text": "#d0dce8", "accent": "#5b8a9a", "overlay": "#14283a" }},
+    "autumn_charm": { "name": "Autumn Charm", "mood": "cozy, rich", "colors": { "background": "#2a1a0c", "text": "#fce8d5", "accent": "#c2783a", "overlay": "#4a2818" }},
+    "cool_mineral": { "name": "Cool Mineral", "mood": "clean, modern", "colors": { "background": "#1c2128", "text": "#e5e9ee", "accent": "#8a9baa", "overlay": "#2a3238" }},
+    "spring_bloom": { "name": "Spring Bloom", "mood": "fresh, lively", "colors": { "background": "#1a2218", "text": "#eef5e8", "accent": "#8ab85a", "overlay": "#2c3a22" }},
+    "vintage_sepia": { "name": "Vintage Sepia", "mood": "nostalgic, aged", "colors": { "background": "#2c2216", "text": "#f0e0c8", "accent": "#b8956a", "overlay": "#3d2e1c" }},
+    "midnight_cinema": { "name": "Midnight Cinema", "mood": "dramatic, cinematic", "colors": { "background": "#0a0a0f", "text": "#e0e0e0", "accent": "#c9a96e", "overlay": "#14141e" }},
+    "morning_dew": { "name": "Morning Dew", "mood": "light, airy", "colors": { "background": "#f5f5f0", "text": "#2c2c2c", "accent": "#8a9a6b", "overlay": "#e8e8dd" }}
+  },
+  "shadows": {
+    "soft_elevation": { "name": "Soft Elevation", "shadow": { "enabled": true, "type": "soft", "x": 0, "y": 4, "blur": 16, "spread": -4, "color": "#000000", "opacity": 0.12 }},
+    "dramatic_drop": { "name": "Dramatic Drop", "shadow": { "enabled": true, "type": "dramatic", "x": 0, "y": 32, "blur": 80, "spread": -12, "color": "#000000", "opacity": 0.38 }},
+    "warm_glow": { "name": "Warm Glow", "shadow": { "enabled": true, "type": "glow", "x": 0, "y": 0, "blur": 40, "spread": 8, "color": "#d4a574", "opacity": 0.3 }},
+    "inner_depth": { "name": "Inner Depth", "shadow": { "enabled": true, "type": "inner", "x": 0, "y": 2, "blur": 8, "spread": 0, "color": "#000000", "opacity": 0.15 }},
+    "classic_frame": { "name": "Classic Frame", "shadow": { "enabled": true, "type": "soft", "x": 0, "y": 0, "blur": 0, "spread": 0, "color": "#000000", "opacity": 0.05 }},
+    "subtle_lift": { "name": "Subtle Lift", "shadow": { "enabled": true, "type": "soft", "x": 0, "y": 2, "blur": 8, "spread": -2, "color": "#000000", "opacity": 0.08 }}
+  },
+  "masks": {
+    "left_fade": { "name": "Left Fade", "layer": { "type": "mask", "fill": { "type": "linearGradient", "angle": 90, "stops": [{"color": "#000000", "opacity": 0.5, "position": 0.0}, {"color": "#000000", "opacity": 0.0, "position": 0.3}] }}},
+    "right_fade": { "name": "Right Fade", "layer": { "type": "mask", "fill": { "type": "linearGradient", "angle": 270, "stops": [{"color": "#000000", "opacity": 0.5, "position": 0.0}, {"color": "#000000", "opacity": 0.0, "position": 0.3}] }}},
+    "bottom_fade": { "name": "Bottom Fade", "layer": { "type": "mask", "fill": { "type": "linearGradient", "angle": 180, "stops": [{"color": "#000000", "opacity": 0.5, "position": 0.8}, {"color": "#000000", "opacity": 0.0, "position": 1.0}] }}},
+    "center_vignette": { "name": "Center Vignette", "layer": { "type": "mask", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.7, "stops": [{"color": "#000000", "opacity": 0.0, "position": 0.5}, {"color": "#000000", "opacity": 0.4, "position": 1.0}] }}},
+    "letterbox": { "name": "Letterbox", "layer": { "type": "mask", "fill": { "type": "linearGradient", "angle": 180, "stops": [{"color": "#000000", "opacity": 0.7, "position": 0.0}, {"color": "#000000", "opacity": 0.0, "position": 0.15}, {"color": "#000000", "opacity": 0.0, "position": 0.85}, {"color": "#000000", "opacity": 0.7, "position": 1.0}] }}},
+    "corner_darken": { "name": "Corner Darken", "layer": { "type": "mask", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.9, "stops": [{"color": "#000000", "opacity": 0.0, "position": 0.7}, {"color": "#000000", "opacity": 0.35, "position": 1.0}] }}}
+  },
+  "lightOrbs": {
+    "warm_top_right": { "name": "Warm Top Right", "layer": { "type": "shape", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.5, "stops": [{"color": "#d4a574", "opacity": 0.15, "position": 0.0}, {"color": "#d4a574", "opacity": 0.0, "position": 1.0}] }, "rect": {"x": 0.6, "y": 0.0, "width": 0.4, "height": 0.4}}},
+    "cool_top_left": { "name": "Cool Top Left", "layer": { "type": "shape", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.5, "stops": [{"color": "#778da9", "opacity": 0.12, "position": 0.0}, {"color": "#778da9", "opacity": 0.0, "position": 1.0}] }, "rect": {"x": 0.0, "y": 0.0, "width": 0.4, "height": 0.4}}},
+    "golden_center": { "name": "Golden Center", "layer": { "type": "shape", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.5, "stops": [{"color": "#f59e0b", "opacity": 0.08, "position": 0.0}, {"color": "#f59e0b", "opacity": 0.0, "position": 1.0}] }, "rect": {"x": 0.2, "y": 0.1, "width": 0.6, "height": 0.6}}},
+    "warm_bottom": { "name": "Warm Bottom", "layer": { "type": "shape", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.5, "stops": [{"color": "#c2783a", "opacity": 0.1, "position": 0.0}, {"color": "#c2783a", "opacity": 0.0, "position": 1.0}] }, "rect": {"x": 0.2, "y": 0.6, "width": 0.6, "height": 0.4}}},
+    "cool_bottom_right": { "name": "Cool Bottom Right", "layer": { "type": "shape", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.5, "stops": [{"color": "#5b8a9a", "opacity": 0.1, "position": 0.0}, {"color": "#5b8a9a", "opacity": 0.0, "position": 1.0}] }, "rect": {"x": 0.55, "y": 0.55, "width": 0.45, "height": 0.45}}},
+    "soft_pink_glow": { "name": "Soft Pink Glow", "layer": { "type": "shape", "fill": { "type": "radialGradient", "center": {"x": 0.5, "y": 0.5}, "radius": 0.5, "stops": [{"color": "#e8a0a0", "opacity": 0.08, "position": 0.0}, {"color": "#e8a0a0", "opacity": 0.0, "position": 1.0}] }, "rect": {"x": 0.1, "y": 0.0, "width": 0.5, "height": 0.5}}}
+  },
+  "timelines": {
+    "minimal_line": { "name": "Minimal Line", "style": { "color": "#888888", "fontSize": "11px" }},
+    "soft_glow_line": { "name": "Soft Glow Line", "style": { "color": "#c9a96e", "fontSize": "12px" }},
+    "year_mark": { "name": "Year Mark", "style": { "color": "#a0a0a0", "fontSize": "13px" }},
+    "dotted_rhythm": { "name": "Dotted Rhythm", "style": { "color": "#999999", "fontSize": "11px" }}
+  },
+  "fonts": {
+    "serif_elegant": { "name": "Serif Elegant", "styles": { "fontFamily": "'Georgia', 'Noto Serif SC', serif", "fontWeight": "400", "letterSpacing": "0.02em", "lineHeight": "1.6" }},
+    "sans_refined": { "name": "Sans Refined", "styles": { "fontFamily": "'Inter', 'Noto Sans SC', sans-serif", "fontWeight": "300", "letterSpacing": "0.01em", "lineHeight": "1.5" }},
+    "mixed_editorial": { "name": "Mixed Editorial", "styles": { "fontFamily": "'Playfair Display', 'Noto Serif SC', serif", "fontWeight": "400", "letterSpacing": "0.03em", "lineHeight": "1.7" }},
+    "warm_rounded": { "name": "Warm Rounded", "styles": { "fontFamily": "'Nunito', 'Noto Sans SC', sans-serif", "fontWeight": "400", "letterSpacing": "0.01em", "lineHeight": "1.5" }}
+  }
+}

@@ -7,7 +7,6 @@ from io import BytesIO
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -22,6 +21,7 @@ from app.schemas.user import UserCreate
 from app.services.categories import ensure_default_categories
 from app.services.storage import ObjectStorage
 from app.services.users import create_user
+from tests.http_client import TestClient
 
 
 # ── Fixtures ──────────────────────────────────────────────────────
@@ -83,7 +83,9 @@ def admin_test_client() -> Generator[
         session_expire_days=30,
         max_upload_size_mb=1,
         allowed_image_types=["image/jpeg", "image/png", "image/webp"],
+        ai_enabled=True,
         deepseek_api_key="test-key",
+        deepseek_model="deepseek-v4-flash",
     )
     storage = FakeObjectStorage()
 
@@ -172,6 +174,100 @@ def _create_photo(session_factory: sessionmaker[Session], owner_id: str, **kwarg
     return photo_id
 
 
+def _create_slide_design(
+    session_factory: sessionmaker[Session],
+    photo_id: str,
+    *,
+    version: int,
+    source: str,
+    status: str,
+    template_id: str = "warm_memory",
+) -> str:
+    from app.schemas.photo import SlideDesignCreate
+    from app.services.slide_designs import create_slide_design
+
+    design = {
+        "photoId": photo_id,
+        "templateId": template_id,
+        "templateParams": {},
+        "layers": [
+            {
+                "id": f"photo-{version}",
+                "type": "image",
+                "source": "preview",
+                "zIndex": 10,
+                "rect": {"x": 0, "y": 0, "width": 1, "height": 1},
+            },
+            {
+                "id": f"caption-{version}",
+                "type": "text",
+                "role": "caption",
+                "content": "A framed memory",
+                "zIndex": 20,
+                "rect": {"x": 0.08, "y": 0.76, "width": 0.84, "height": 0.14},
+            },
+        ],
+        "styleTokens": {
+            "--kf-background-color": "#111111",
+            "--kf-text-color": "#ffffff",
+        },
+        "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+    }
+    with session_factory() as db:
+        design = create_slide_design(
+            db,
+            photo_id,
+            SlideDesignCreate(
+                version=version,
+                design_json=design,
+                source=source,
+                status=status,
+                validation_errors=None,
+            ),
+        )
+        return design.id
+
+
+def _create_job(
+    session_factory: sessionmaker[Session],
+    photo_id: str,
+    *,
+    job_type: str,
+    status: str,
+    error_message: str | None = None,
+    ai_provider: str | None = None,
+    ai_model: str | None = None,
+    ai_prompt_version: str | None = None,
+) -> str:
+    import uuid
+    from datetime import datetime, timezone
+
+    from app.models import PhotoProcessingJob
+
+    now = datetime.now(timezone.utc)
+    job_id = str(uuid.uuid4())
+    with session_factory() as db:
+        job = PhotoProcessingJob(
+            id=job_id,
+            photo_id=photo_id,
+            job_type=job_type,
+            status=status,
+            attempts=1,
+            max_attempts=2,
+            error_message=error_message,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            ai_prompt_version=ai_prompt_version,
+            created_at=now,
+            updated_at=now,
+            started_at=now,
+            finished_at=now if status in {"succeeded", "failed"} else None,
+        )
+        db.add(job)
+        db.commit()
+    return job_id
+
+
 def _jpeg_bytes() -> bytes:
     img = Image.new("RGB", (64, 48), color=(100, 150, 200))
     buf = BytesIO()
@@ -237,6 +333,174 @@ class TestAdminPhotoGet:
 
         resp = client.get(f"/api/admin/photos/{photo_id}")
         assert resp.status_code == 403
+
+    def test_admin_detail_includes_design_versions_recent_jobs_and_audit(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_detail", role="admin")
+        _login(client, "admin_detail")
+        owner_id = _seed_user(sf, username="owner_detail")
+        photo_id = _create_photo(
+            sf,
+            owner_id,
+            ai_analysis_json={"subject": "lake"},
+            final_caption="A framed memory",
+            location_name="West Lake",
+        )
+        _create_slide_design(sf, photo_id, version=1, source="fallback", status="draft", template_id="warm_memory")
+        _create_slide_design(sf, photo_id, version=2, source="ai", status="active", template_id="gallery_center")
+        _create_job(
+            sf,
+            photo_id,
+            job_type="slide_design_generate",
+            status="failed",
+            error_message="quality score 2/5 below threshold",
+            ai_provider="deepseek",
+            ai_model="deepseek-v4-flash",
+            ai_prompt_version="slide_design.v1",
+        )
+        _create_job(
+            sf,
+            photo_id,
+            job_type="vision_analyze",
+            status="succeeded",
+            ai_provider="ollama",
+            ai_model="qwen3-vl:8b",
+        )
+        patch_resp = client.patch(
+            f"/api/admin/photos/{photo_id}",
+            json={"location_city": "Hangzhou"},
+        )
+        assert patch_resp.status_code == 200
+
+        resp = client.get(f"/api/admin/photos/{photo_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["active_design_source"] == "ai"
+        assert data["active_design_version"] == 2
+        assert len(data["design_versions"]) == 2
+        assert data["design_versions"][0]["version"] == 2
+        assert data["design_versions"][0]["template_id"] == "gallery_center"
+        assert data["design_versions"][0]["quality_report"]["total_score"] >= 1
+        assert len(data["recent_jobs"]) >= 2
+        assert data["recent_jobs"][0]["job_type"] in {"slide_design_generate", "vision_analyze"}
+        assert {job["ai_provider"] for job in data["recent_jobs"]} >= {"deepseek", "ollama"}
+        assert any(entry["action"] == "photo.update" for entry in data["recent_audit_logs"])
+
+
+class TestAdminDesignVersions:
+    def test_admin_can_activate_manual_draft_version(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_versions", role="admin")
+        _login(client, "admin_versions")
+        owner_id = _seed_user(sf, username="owner_versions")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+        _create_slide_design(sf, photo_id, version=1, source="fallback", status="draft", template_id="warm_memory")
+        _create_slide_design(sf, photo_id, version=2, source="ai", status="active", template_id="gallery_center")
+        manual_draft_id = _create_slide_design(sf, photo_id, version=3, source="manual", status="draft", template_id="minimal_white")
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/design-versions/{manual_draft_id}/activate")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["active_design_source"] == "manual"
+        assert data["active_design_version"] == 3
+        assert data["design_versions"][0]["id"] == manual_draft_id
+        assert data["design_versions"][0]["status"] == "active"
+        assert any(
+            version["version"] == 2 and version["status"] == "draft"
+            for version in data["design_versions"]
+        )
+
+        public_resp = client.get(f"/api/photos/{photo_id}/slide-design")
+        assert public_resp.status_code == 200
+        assert public_resp.json()["source"] == "manual"
+        assert public_resp.json()["version"] == 3
+
+        audit_resp = client.get("/api/admin/audit-logs?action=design.activate")
+        assert audit_resp.status_code == 200
+        entries = audit_resp.json()["items"]
+        assert any(entry["target_id"] == manual_draft_id for entry in entries)
+
+    def test_admin_can_save_manual_design_as_draft_without_replacing_active(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_manual", role="admin")
+        _login(client, "admin_manual")
+        owner_id = _seed_user(sf, username="owner_manual")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+        _create_slide_design(sf, photo_id, version=1, source="ai", status="active", template_id="gallery_center")
+
+        payload = {
+            "design_json": {
+                "photoId": photo_id,
+                "templateId": "minimal_white",
+                "templateParams": {},
+                "layers": [
+                    {
+                        "id": "photo-manual",
+                        "type": "image",
+                        "source": "preview",
+                        "zIndex": 10,
+                        "rect": {"x": 0, "y": 0, "width": 1, "height": 1},
+                    },
+                    {
+                        "id": "caption-manual",
+                        "type": "text",
+                        "role": "caption",
+                        "content": "Manual polish",
+                        "zIndex": 20,
+                        "rect": {"x": 0.08, "y": 0.78, "width": 0.84, "height": 0.12},
+                    },
+                ],
+                "styleTokens": {
+                    "--kf-background-color": "#ffffff",
+                    "--kf-text-color": "#111111",
+                    "scopedCss": ".slide-shell { position: absolute; color: red; }",
+                },
+                "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+            }
+        }
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/design-versions/manual", json=payload)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["active_design_source"] == "ai"
+        assert data["active_design_version"] == 1
+        assert data["design_versions"][0]["source"] == "manual"
+        assert data["design_versions"][0]["status"] == "draft"
+        assert data["design_versions"][0]["version"] == 2
+
+        public_resp = client.get(f"/api/photos/{photo_id}/slide-design")
+        assert public_resp.status_code == 200
+        assert public_resp.json()["source"] == "ai"
+        assert public_resp.json()["version"] == 1
+
+        audit_resp = client.get("/api/admin/audit-logs?action=design.manual_create")
+        assert audit_resp.status_code == 200
+        entries = audit_resp.json()["items"]
+        assert any(entry["target_type"] == "slide_design" for entry in entries)
+
+    def test_invalid_manual_design_json_is_rejected(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_invalid_manual", role="admin")
+        _login(client, "admin_invalid_manual")
+        owner_id = _seed_user(sf, username="owner_invalid_manual")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+        _create_slide_design(sf, photo_id, version=1, source="ai", status="active", template_id="gallery_center")
+
+        resp = client.post(
+            f"/api/admin/photos/{photo_id}/design-versions/manual",
+            json={
+                "design_json": {
+                    "photoId": photo_id,
+                    "templateId": "minimal_white",
+                    "templateParams": {},
+                    "layers": [],
+                    "styleTokens": {},
+                    "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+                },
+            },
+        )
+        assert resp.status_code == 400
+        assert "layers" in resp.json()["detail"]
 
 
 class TestAdminPhotoPatch:
@@ -418,8 +682,9 @@ class TestAdminGranularRegenerate:
         assert resp.status_code == 201
         data = resp.json()
         assert data["photo_id"] == photo_id
-        # Fallback generates directly, no job required
         assert data["scope"] == "fallback"
+        assert data["job_type"] == "fallback_regenerate"
+        assert data["job_id"] is not None
 
     def test_regenerate_full_when_ai_disabled_returns_error(self, admin_test_client):
         client, storage, sf = admin_test_client
@@ -537,7 +802,124 @@ class TestAdminGranularRegenerate:
         assert resp.status_code == 201
         data = resp.json()
         assert data["scope"] == "template"
+        assert data["job_type"] == "template_regenerate"
         assert data["job_id"] is not None
+
+
+class TestAdminJobs:
+    def test_admin_jobs_can_filter_by_status_job_type_and_photo(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_jobs", role="admin")
+        _login(client, "admin_jobs")
+        owner_id = _seed_user(sf, username="owner_jobs")
+        photo_a = _create_photo(sf, owner_id, status="ready")
+        photo_b = _create_photo(sf, owner_id, status="ready")
+        _create_job(sf, photo_a, job_type="vision_analyze", status="failed", error_message="vision timeout")
+        _create_job(sf, photo_a, job_type="slide_design_generate", status="succeeded", ai_provider="deepseek")
+        _create_job(sf, photo_b, job_type="reverse_geocode", status="pending")
+
+        resp = client.get("/api/admin/jobs?status=failed")
+        assert resp.status_code == 200
+        failed_rows = resp.json()
+        assert len(failed_rows) == 1
+        assert failed_rows[0]["photo_id"] == photo_a
+        assert failed_rows[0]["job_type"] == "vision_analyze"
+
+        resp = client.get("/api/admin/jobs?job_type=reverse_geocode")
+        assert resp.status_code == 200
+        rows = resp.json()
+        assert len(rows) == 1
+        assert rows[0]["photo_id"] == photo_b
+
+        resp = client.get(f"/api/admin/jobs?photo_id={photo_a}")
+        assert resp.status_code == 200
+        rows = resp.json()
+        assert len(rows) == 2
+        assert {row["job_type"] for row in rows} == {"vision_analyze", "slide_design_generate"}
+
+    def test_retry_job_writes_audit_log(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_retry", role="admin")
+        _login(client, "admin_retry")
+        owner_id = _seed_user(sf, username="owner_retry")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+        job_id = _create_job(sf, photo_id, job_type="vision_analyze", status="failed", error_message="timeout")
+
+        resp = client.post(f"/api/admin/jobs/{job_id}/retry")
+        assert resp.status_code == 200
+
+        audit_resp = client.get("/api/admin/audit-logs?action=job.retry")
+        assert audit_resp.status_code == 200
+        entries = audit_resp.json()["items"]
+        assert any(entry["target_id"] == job_id for entry in entries)
+
+
+class TestAdminPhotoList:
+    def test_admin_photo_list_supports_operational_filters(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_list", role="admin")
+        _login(client, "admin_list")
+        owner_id = _seed_user(sf, username="owner_list")
+
+        photo_fallback = _create_photo(
+            sf,
+            owner_id,
+            category="life",
+            geocoding_status="failed",
+            status="ready",
+        )
+        photo_ai = _create_photo(
+            sf,
+            owner_id,
+            category="pet",
+            ai_analysis_json={"subject": "cat"},
+            geocoding_status="succeeded",
+            status="ready",
+        )
+        photo_manual = _create_photo(
+            sf,
+            owner_id,
+            category="photography",
+            geocoding_status="succeeded",
+            status="ready",
+        )
+
+        _create_slide_design(sf, photo_fallback, version=1, source="fallback", status="active", template_id="warm_memory")
+        _create_slide_design(sf, photo_ai, version=1, source="ai", status="active", template_id="gallery_center")
+        _create_slide_design(sf, photo_manual, version=1, source="manual", status="active", template_id="minimal_white")
+        _create_job(sf, photo_fallback, job_type="vision_analyze", status="failed", error_message="timeout")
+        _create_job(sf, photo_ai, job_type="vision_analyze", status="succeeded", ai_provider="ollama")
+
+        resp = client.get("/api/admin/photos?design_source=manual")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == photo_manual
+
+        resp = client.get("/api/admin/photos?ai_status=analyzed")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["id"] == photo_ai
+
+        resp = client.get("/api/admin/photos?failed_only=true")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["id"] == photo_fallback
+
+        resp = client.get("/api/admin/photos?needs_review=true")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        ids = {item["id"] for item in items}
+        assert photo_fallback in ids
+        assert photo_ai not in ids
+
+        resp = client.get("/api/admin/photos?category=pet&geocoding_status=succeeded")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == photo_ai
 
 
 # ── Tests: Admin Category API ──────────────────────────────────────

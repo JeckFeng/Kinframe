@@ -36,7 +36,7 @@ const vigStyle = computed(() => {
 
 <template>
   <div
-    class="kf-layer kf-layer--vignette"
+    class="kf-layer kf-layer--vignette kf-vignette-layer"
     :data-layer-id="layer.id || ''"
     :style="vigStyle"
   />

@@ -3,8 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/lib/test_env.sh"
 
-API_BASE="${API_BASE:-http://localhost:${FRONTEND_PORT:-3000}/api}"
+API_BASE="${API_BASE:-http://localhost:${BACKEND_PORT:-18000}/api}"
 FRONTEND_BASE="${FRONTEND_BASE:-http://localhost:${FRONTEND_PORT:-3000}}"
 
 echo "=== KinFrame v0.3 Acceptance ==="
@@ -18,18 +19,8 @@ fail() { echo "  FAIL: $1" >&2; FAILED=$((FAILED + 1)); }
 
 # ── 1. Verify infrastructure ───────────────────────────────────────
 echo "--- 1. Infrastructure ---"
-
-if [[ "$(docker inspect -f '{{.State.Running}}' kinframe-postgres 2>/dev/null || true)" != "true" ]]; then
-  echo "Starting Docker infra..."
-  just infra
-  echo "Waiting for PostgreSQL..."
-  for _ in $(seq 1 15); do
-    if docker exec kinframe-postgres pg_isready -U kinframe -d kinframe >/dev/null 2>&1; then
-      break
-    fi
-    sleep 2
-  done
-fi
+require_command python3
+ensure_infra_running
 
 for svc in kinframe-postgres kinframe-redis kinframe-minio; do
   if [[ "$(docker inspect -f '{{.State.Running}}' "$svc" 2>/dev/null || true)" == "true" ]]; then
@@ -40,10 +31,8 @@ for svc in kinframe-postgres kinframe-redis kinframe-minio; do
 done
 
 # Verify backend health
-if curl -fsS -o /dev/null -w '%{http_code}' "$API_BASE/health" 2>/dev/null | grep -q 200; then
+if ensure_backend_running "$API_BASE" >/dev/null 2>&1; then
   pass "Backend health check"
-else
-  fail "Backend health check (is just backend running?)"
 fi
 
 # ── 2. Create test users and login ─────────────────────────────────
@@ -359,13 +348,13 @@ pass "v0.3 schema fields: Fill, Shadow, template IDs, layer types verified"
 echo "--- 8. Playwright E2E tests ---"
 
 if command -v npx &>/dev/null; then
-  PLAYWRIGHT_BASE_URL="$FRONTEND_BASE" cd "$ROOT_DIR/frontend" && npx playwright test --config playwright.config.ts 2>&1 || {
-    echo "  (Playwright tests completed with some failures — see output above)"
-  }
-  pass "Playwright E2E tests executed"
+  if run_playwright_suite "$ROOT_DIR" "$FRONTEND_BASE" 2>&1; then
+    pass "Playwright E2E tests passed"
+  else
+    fail "Playwright E2E tests failed"
+  fi
 else
-  echo "  npx not available, skipping Playwright tests"
-  pass "Playwright E2E tests (skipped — npx not found)"
+  fail "Playwright E2E tests unavailable (npx not found)"
 fi
 
 # ── 9. Verify backup/restore with v0.3 data ───────────────────────
@@ -417,12 +406,13 @@ fi
 
 # Run mobile viewport Playwright test if available
 if command -v npx &>/dev/null; then
-  cd "$ROOT_DIR/frontend" && PLAYWRIGHT_BASE_URL="$FRONTEND_BASE" npx playwright test --config playwright.config.ts --project=mobile 2>&1 || {
-    echo "  (Mobile Playwright tests completed with some failures)"
-  }
-  pass "Mobile viewport: Playwright mobile tests executed"
+  if run_playwright_suite "$ROOT_DIR" "$FRONTEND_BASE" --project=mobile 2>&1; then
+    pass "Mobile viewport: Playwright mobile tests passed"
+  else
+    fail "Mobile viewport: Playwright mobile tests failed"
+  fi
 else
-  pass "Mobile viewport: verified via code analysis (npx not available)"
+  fail "Mobile viewport: Playwright unavailable (npx not found)"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────

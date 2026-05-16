@@ -3,29 +3,19 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/lib/test_env.sh"
 
-API_BASE="${API_BASE:-http://localhost:${FRONTEND_PORT:-3000}/api}"
+API_BASE="${API_BASE:-http://localhost:${BACKEND_PORT:-18000}/api}"
 
 echo "=== KinFrame E2E Test Data Setup ==="
 
 # ── 1. Check infrastructure ───────────────────────────────────────
 echo "--- Checking infrastructure ---"
-
-for svc in kinframe-postgres kinframe-redis kinframe-minio; do
-  if [[ "$(docker inspect -f '{{.State.Running}}' "$svc" 2>/dev/null || true)" != "true" ]]; then
-    echo "Starting Docker infra..."
-    just infra
-    echo "Waiting for PostgreSQL..."
-    for _ in $(seq 1 15); do
-      if docker exec kinframe-postgres pg_isready -U kinframe -d kinframe >/dev/null 2>&1; then
-        break
-      fi
-      sleep 2
-    done
-    break
-  fi
-done
+require_command python3
+ensure_infra_running
+ensure_backend_running "$API_BASE"
 echo "  Infrastructure: OK"
+echo "  Backend API: OK"
 
 # ── 2. Create admin user ─────────────────────────────────────────
 echo "--- Creating test users ---"

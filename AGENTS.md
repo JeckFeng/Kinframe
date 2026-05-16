@@ -1,3 +1,10 @@
+# Global Rules
+Within the current project's workspace, all your actions must strictly adhere to the following rules.
+@/home/xian00/.codex/RTK.md
+Please carefully read the contents of the “@/home/xian00/.codex/RTK.md” file.
+Strictly follow the instructions in RTK.md.
+Always prefix shell commands with `rtk`.
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization

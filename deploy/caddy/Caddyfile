@@ -1,3 +1,16 @@
 :80 {
-    respond "KinFrame v0 infrastructure is running"
+    # MinIO bucket — presigned URL 重写到 ngrok 后走这个路径
+    handle /kinframe-photos/* {
+        reverse_proxy localhost:19000
+    }
+
+    # API
+    handle /api/* {
+        reverse_proxy localhost:18000
+    }
+
+    # 前端 + 其他所有
+    handle {
+        reverse_proxy localhost:3000
+    }
 }

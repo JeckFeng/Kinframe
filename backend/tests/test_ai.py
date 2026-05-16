@@ -115,6 +115,7 @@ def _create_ready_photo(db: Session, storage: FakeObjectStorage, owner_id: str, 
         taken_at=kwargs.get("taken_at", datetime.now(timezone.utc)),
         uploaded_at=kwargs.get("uploaded_at", datetime.now(timezone.utc)),
         user_message=kwargs.get("user_message"),
+        caption_source=kwargs.get("caption_source", "none"),
         geocoding_status="not_applicable",
         location_name=kwargs.get("location_name"),
         location_city=kwargs.get("location_city"),
@@ -144,16 +145,14 @@ class TestOllamaVisionProvider:
         provider = OllamaVisionProvider(settings)
 
         mock_response = {
-            "message": {
-                "content": (
-                    '{"schema_version":"vision_analysis.v1","subject":"a cat sleeping",'
-                    '"scene":"indoor living room","mood":["calm","cozy"],'
-                    '"dominant_colors":["#C0A080","#404040"],"weather":"unknown",'
-                    '"environment":"indoor","suggested_category":"pet",'
-                    '"category_confidence":0.9,"quality":"good",'
-                    '"quality_notes":"well lit, sharp focus"}'
-                ),
-            }
+            "response": (
+                '{"schema_version":"vision_analysis.v1","subject":"a cat sleeping",'
+                '"scene":"indoor living room","mood":["calm","cozy"],'
+                '"dominant_colors":["#C0A080","#404040"],"weather":"unknown",'
+                '"environment":"indoor","suggested_category":"pet",'
+                '"category_confidence":0.9,"quality":"good",'
+                '"quality_notes":"well lit, sharp focus"}'
+            ),
         }
         mock_client = MagicMock()
         mock_client.post.return_value.raise_for_status.return_value = None
@@ -184,6 +183,58 @@ class TestOllamaVisionProvider:
             result = provider.analyze(b"fake-image-bytes")
 
         assert result is None
+
+    def test_analyze_extracts_json_from_markdown_fence(self):
+        """Markdown-fenced JSON should still be parsed."""
+        settings = Settings(
+            ollama_endpoint="http://ollama.test:11434",
+            ollama_vision_model="qwen3-vl:8b",
+        )
+        provider = OllamaVisionProvider(settings)
+
+        mock_response = {
+            "response": (
+                "```json\n"
+                '{"schema_version":"vision_analysis.v1","subject":"mountain lake","scene":"outdoor","mood":["calm"],'
+                '"dominant_colors":["#123456"],"weather":"sunny","environment":"outdoor","suggested_category":"travel",'
+                '"category_confidence":0.8,"quality":"good","quality_notes":"clear"}'
+                "\n```"
+            ),
+        }
+        mock_client = MagicMock()
+        mock_client.post.return_value.raise_for_status.return_value = None
+        mock_client.post.return_value.json.return_value = mock_response
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = provider.analyze(b"fake-image-bytes")
+
+        assert isinstance(result, VisionAnalysisResult)
+        assert result.subject == "mountain lake"
+        assert result.suggested_category == "travel"
+
+    def test_analyze_extracts_embedded_json_from_prose(self):
+        """Prose-wrapped JSON should still be parsed when the model ignores JSON-only instructions."""
+        settings = Settings(
+            ollama_endpoint="http://ollama.test:11434",
+            ollama_vision_model="qwen3-vl:8b",
+        )
+        provider = OllamaVisionProvider(settings)
+
+        mock_response = {
+            "response": (
+                "Here is the requested JSON: "
+                '{"schema_version":"vision_analysis.v1","subject":"person near lake","scene":"mountains","mood":["bright"],'
+                '"dominant_colors":["#abcdef"],"weather":"cloudy","environment":"outdoor","suggested_category":"travel",'
+                '"category_confidence":0.7,"quality":"good","quality_notes":"balanced"}'
+            ),
+        }
+        mock_client = MagicMock()
+        mock_client.post.return_value.raise_for_status.return_value = None
+        mock_client.post.return_value.json.return_value = mock_response
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = provider.analyze(b"fake-image-bytes")
+
+        assert isinstance(result, VisionAnalysisResult)
+        assert result.subject == "person near lake"
 
     def test_analyze_returns_none_on_http_error(self):
         """HTTP errors should return None, not crash."""
@@ -230,6 +281,7 @@ class TestOllamaVisionProvider:
         assert body["model"] == "qwen3-vl:8b"
         assert body["format"] == "json"
         assert body["stream"] is False
+        assert body["options"] == {"temperature": 0, "num_predict": 256}
         assert "images" in body
         import base64
         assert body["images"][0] == base64.b64encode(test_bytes).decode("utf-8")
@@ -455,6 +507,7 @@ class TestSlideDesignPromptBuilder:
             photo_id="p1",
             photo_category="life",
             user_message=None,
+            ai_caption_enabled=False,
             taken_at_str="2024-03-15T10:30:00Z",
             location_summary=None,
             vision_result=None,
@@ -473,6 +526,7 @@ class TestSlideDesignPromptBuilder:
             photo_id="p1",
             photo_category="life",
             user_message=None,
+            ai_caption_enabled=False,
             taken_at_str="2024-03-15T10:30:00Z",
             location_summary=None,
             vision_result=None,
@@ -491,6 +545,7 @@ class TestSlideDesignPromptBuilder:
             photo_id="p1",
             photo_category="life",
             user_message="My special caption",
+            ai_caption_enabled=True,
             taken_at_str="2024-03-15T10:30:00Z",
             location_summary=None,
             vision_result=None,
@@ -520,6 +575,7 @@ class TestSlideDesignPromptBuilder:
             photo_id="p1",
             photo_category="life",
             user_message=None,
+            ai_caption_enabled=False,
             taken_at_str="2024-03-15T10:30:00Z",
             location_summary=None,
             vision_result=vision,
@@ -536,6 +592,7 @@ class TestSlideDesignPromptBuilder:
             photo_id="p1",
             photo_category="life",
             user_message=None,
+            ai_caption_enabled=False,
             taken_at_str="2024-03-15T10:30:00Z",
             location_summary=None,
             vision_result=None,
@@ -551,6 +608,7 @@ class TestSlideDesignPromptBuilder:
             photo_id="p1",
             photo_category="life",
             user_message=None,
+            ai_caption_enabled=False,
             taken_at_str="2024-03-15T10:30:00Z",
             location_summary=None,
             vision_result=None,
@@ -567,6 +625,7 @@ class TestSlideDesignPromptBuilder:
             photo_id="p1",
             photo_category="life",
             user_message=None,
+            ai_caption_enabled=False,
             taken_at_str="2024-03-15T10:30:00Z",
             location_summary="Beijing, China",
             vision_result=None,
@@ -591,7 +650,7 @@ class TestVisionAnalyzeJob:
         storage = FakeObjectStorage()
         db = worker_db
         owner_id = _seed_user(db)
-        photo = _create_ready_photo(db, storage, owner_id)
+        photo = _create_ready_photo(db, storage, owner_id, ai_caption_enabled=True)
 
         # Create vision_analyze job
         job = create_vision_analyze_job(db, photo.id, max_attempts=2)
@@ -624,6 +683,45 @@ class TestVisionAnalyzeJob:
         assert photo.ai_analysis_json is not None
         assert photo.ai_analysis_json.get("subject") == "test subject"
         assert photo.ai_analysis_json.get("mood") == ["happy"]
+        assert photo.ai_category_suggestion == "life"
+
+    def test_process_vision_analyze_job_applies_ai_category_when_fallback_category_is_pending(self, worker_db):
+        """Vision suggestion should promote fallback category when AI auto-category is enabled."""
+        from app.services.ai.ollama_provider import VisionAnalysisResult
+        from app.services.photo_jobs import create_vision_analyze_job, process_vision_analyze_job
+
+        storage = FakeObjectStorage()
+        db = worker_db
+        owner_id = _seed_user(db)
+        photo = _create_ready_photo(
+            db,
+            storage,
+            owner_id,
+            category="life",
+            category_source="fallback",
+            ai_category_enabled=True,
+        )
+
+        job = create_vision_analyze_job(db, photo.id, max_attempts=1)
+        mock_provider = MagicMock()
+        mock_provider.analyze.return_value = VisionAnalysisResult(
+            subject="mountain lake",
+            scene="snow mountains and lake",
+            mood=["calm"],
+            dominant_colors=["#1A3B5C"],
+            weather="sunny",
+            environment="outdoor",
+            suggested_category="travel",
+            category_confidence=0.92,
+            quality="good",
+            quality_notes="sharp",
+        )
+
+        assert process_vision_analyze_job(db, job, photo, storage, _provider=mock_provider)
+        db.refresh(photo)
+        assert photo.ai_category_suggestion == "travel"
+        assert photo.category == "travel"
+        assert photo.category_source == "ai"
 
     def test_process_vision_analyze_job_no_preview_marks_failed(self, worker_db):
         """Photo without preview object_key should fail gracefully."""
@@ -632,7 +730,7 @@ class TestVisionAnalyzeJob:
         storage = FakeObjectStorage()
         db = worker_db
         owner_id = _seed_user(db)
-        photo = _create_ready_photo(db, storage, owner_id)
+        photo = _create_ready_photo(db, storage, owner_id, ai_caption_enabled=True)
         photo.object_key_preview = None
         db.commit()
 
@@ -727,6 +825,73 @@ class TestSlideDesignGenerateJob:
         assert active.source == "ai"
         assert active.version == 2
 
+    def test_process_slide_design_generate_job_sets_ai_caption_from_caption_layer(self, worker_db):
+        """AI full-design generation should materialize caption text into photo.ai_caption/final_caption."""
+        from app.services.photo_jobs import create_slide_design_generate_job, process_slide_design_generate_job
+        from app.services.slide_designs import create_slide_design, get_latest_active_slide_design
+        from app.schemas.photo import SlideDesignCreate
+
+        storage = FakeObjectStorage()
+        db = worker_db
+        owner_id = _seed_user(db)
+        photo = _create_ready_photo(
+            db,
+            storage,
+            owner_id,
+            user_message=None,
+            ai_caption_enabled=True,
+            caption_source="none",
+        )
+
+        fallback_design = {
+            "photoId": photo.id,
+            "templateId": "cinematic_fullscreen",
+            "templateParams": {},
+            "layers": [{
+                "type": "image",
+                "zIndex": 1,
+                "rect": {"x": 0, "y": 0, "width": 1, "height": 1},
+                "source": "preview",
+            }],
+            "styleTokens": {"--kf-background-color": "#111111"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+        }
+        create_slide_design(db, photo.id, SlideDesignCreate(
+            version=1,
+            design_json=fallback_design,
+            source="fallback",
+            status="active",
+        ))
+
+        job = create_slide_design_generate_job(db, photo.id, max_attempts=1, provider_name="deepseek")
+        job.attempts = 1
+        db.add(job)
+        db.commit()
+
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = {
+            "photoId": photo.id,
+            "templateId": "poetic_landscape",
+            "templateParams": {},
+            "layers": [
+                {"type": "image", "zIndex": 1, "source": "preview", "rect": {"x": 0.06, "y": 0.08, "width": 0.88, "height": 0.74}},
+                {"type": "text", "role": "caption", "zIndex": 20, "content": "雪山与湖水之间的宁静一刻", "rect": {"x": 0.08, "y": 0.78, "width": 0.72, "height": 0.1}},
+                {"type": "timeline", "zIndex": 30, "label": "2024-03-15", "rect": {"x": 0.08, "y": 0.91, "width": 0.84, "height": 0.05}},
+            ],
+            "styleTokens": {"--kf-background-color": "#0b1320", "--kf-text-color": "#ffffff"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+            "aiMeta": {"provider": "deepseek", "model": "deepseek-v4-flash", "promptVersion": "slide_design.v1"},
+        }
+
+        assert process_slide_design_generate_job(db, job, photo, _provider=mock_provider)
+        db.refresh(photo)
+        assert photo.ai_caption == "雪山与湖水之间的宁静一刻"
+        assert photo.final_caption == "雪山与湖水之间的宁静一刻"
+        assert photo.caption_source == "ai"
+        active = get_latest_active_slide_design(db, photo.id)
+        assert active is not None
+        assert active.source == "ai"
+
     def test_process_slide_design_generate_invalid_json_fails(self, worker_db):
         """DeepSeek returning invalid JSON should mark job failed, keep fallback active."""
         from app.services.photo_jobs import create_slide_design_generate_job, process_slide_design_generate_job
@@ -783,6 +948,9 @@ class TestSlideDesignGenerateJob:
         create_slide_design(db, photo.id, SlideDesignCreate(version=1, design_json=manual_design, source="manual", status="active"))
 
         job = create_slide_design_generate_job(db, photo.id, max_attempts=1, provider_name="deepseek")
+        job.attempts = 1
+        db.add(job)
+        db.commit()
         mock_provider = MagicMock()
         mock_provider.generate.return_value = {
             "photoId": photo.id, "templateId": "cinematic_fullscreen",
@@ -798,6 +966,138 @@ class TestSlideDesignGenerateJob:
         active = get_latest_active_slide_design(db, photo.id)
         assert active is not None
         assert active.source == "manual"
+
+    def test_low_quality_design_is_rejected_and_fallback_stays_active(self, worker_db):
+        """Quality scoring should reject poor AI designs and preserve current active design."""
+        from app.services.photo_jobs import create_slide_design_generate_job, process_slide_design_generate_job
+
+        storage = FakeObjectStorage()
+        db = worker_db
+        owner_id = _seed_user(db)
+        photo = _create_ready_photo(db, storage, owner_id, ai_caption_enabled=True)
+
+        from app.services.slide_designs import create_slide_design, get_latest_active_slide_design
+        from app.schemas.photo import SlideDesignCreate
+        fallback = {
+            "photoId": photo.id,
+            "templateId": "cinematic_fullscreen",
+            "templateParams": {},
+            "layers": [
+                {"type": "image", "zIndex": 1, "source": "preview", "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+            ],
+            "styleTokens": {"--kf-background-color": "#111111", "--kf-text-color": "#ffffff"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+        }
+        create_slide_design(db, photo.id, SlideDesignCreate(version=1, design_json=fallback, source="fallback", status="active"))
+
+        job = create_slide_design_generate_job(db, photo.id, max_attempts=1, provider_name="deepseek")
+        job.attempts = 1
+        db.add(job)
+        db.commit()
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = {
+            "photoId": photo.id,
+            "templateId": "gallery_center",
+            "templateParams": {},
+            "layers": [
+                {"type": "image", "zIndex": 1, "source": "preview", "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
+                {"type": "text", "role": "caption", "zIndex": 2, "content": "Bad overlap", "rect": {"x": 0.2, "y": 0.2, "width": 0.6, "height": 0.4}},
+                {"type": "mask", "zIndex": 3, "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}, "style": {"color": "#000000", "opacity": 0.9}},
+                {"type": "shape", "zIndex": 4, "rect": {"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.2}},
+                {"type": "shape", "zIndex": 5, "rect": {"x": 0.2, "y": 0.2, "width": 0.3, "height": 0.2}},
+                {"type": "shape", "zIndex": 6, "rect": {"x": 0.3, "y": 0.3, "width": 0.3, "height": 0.2}},
+            ],
+            "styleTokens": {"--kf-background-color": "#111111", "--kf-text-color": "#111111"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+        }
+
+        assert process_slide_design_generate_job(db, job, photo, _provider=mock_provider)
+        db.refresh(job)
+        assert job.status == "failed"
+        active = get_latest_active_slide_design(db, photo.id)
+        assert active is not None
+        assert active.source == "fallback"
+
+
+class TestGranularRegenerationJobs:
+    def test_template_regeneration_only_changes_template_fields(self, worker_db):
+        from app.services.photo_jobs import create_template_regenerate_job, process_template_regenerate_job
+        from app.services.slide_designs import create_slide_design, get_latest_active_slide_design
+        from app.schemas.photo import SlideDesignCreate
+
+        storage = FakeObjectStorage()
+        db = worker_db
+        owner_id = _seed_user(db)
+        photo = _create_ready_photo(db, storage, owner_id, user_message="Hello")
+
+        active_design = {
+            "photoId": photo.id,
+            "templateId": "warm_memory",
+            "templateParams": {"orientation": "landscape"},
+            "layers": [
+                {"type": "image", "zIndex": 1, "source": "preview", "rect": {"x": 0.05, "y": 0.05, "width": 0.9, "height": 0.7}},
+                {"type": "text", "role": "caption", "zIndex": 2, "content": "Hello", "rect": {"x": 0.05, "y": 0.82, "width": 0.6, "height": 0.08}},
+            ],
+            "styleTokens": {"--kf-background-color": "#f7f5ef", "--kf-text-color": "#171717"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+        }
+        create_slide_design(db, photo.id, SlideDesignCreate(version=1, design_json=active_design, source="ai", status="active"))
+
+        job = create_template_regenerate_job(db, photo.id, max_attempts=1, provider_name="deepseek")
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = {
+            "templateId": "gallery_center",
+            "templateParams": {"orientation": "landscape"},
+        }
+
+        assert process_template_regenerate_job(db, job, photo, _provider=mock_provider)
+        active = get_latest_active_slide_design(db, photo.id)
+        assert active is not None
+        assert active.design_json["templateId"] == "gallery_center"
+        assert active.design_json["layers"] == active_design["layers"]
+        assert active.design_json["styleTokens"] == active_design["styleTokens"]
+
+    def test_css_regeneration_only_changes_style_tokens(self, worker_db):
+        from app.services.photo_jobs import create_css_regenerate_job, process_css_regenerate_job
+        from app.services.slide_designs import create_slide_design, get_latest_active_slide_design
+        from app.schemas.photo import SlideDesignCreate
+
+        storage = FakeObjectStorage()
+        db = worker_db
+        owner_id = _seed_user(db)
+        photo = _create_ready_photo(db, storage, owner_id, user_message="Hello")
+
+        active_design = {
+            "photoId": photo.id,
+            "templateId": "warm_memory",
+            "templateParams": {"orientation": "landscape"},
+            "layers": [
+                {"type": "image", "zIndex": 1, "source": "preview", "rect": {"x": 0.05, "y": 0.05, "width": 0.9, "height": 0.7}},
+                {"type": "text", "role": "caption", "zIndex": 2, "content": "Hello", "rect": {"x": 0.05, "y": 0.82, "width": 0.6, "height": 0.08}},
+            ],
+            "styleTokens": {"--kf-background-color": "#f7f5ef", "--kf-text-color": "#171717"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+        }
+        create_slide_design(db, photo.id, SlideDesignCreate(version=1, design_json=active_design, source="ai", status="active"))
+
+        job = create_css_regenerate_job(db, photo.id, max_attempts=1, provider_name="deepseek")
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = {
+            "styleTokens": {
+                "--kf-background-color": "#111111",
+                "--kf-text-color": "#f8fafc",
+                "scopedCss": ".kf-caption { text-wrap: balance; position: absolute; }",
+            },
+        }
+
+        assert process_css_regenerate_job(db, job, photo, _provider=mock_provider)
+        active = get_latest_active_slide_design(db, photo.id)
+        assert active is not None
+        assert active.design_json["templateId"] == active_design["templateId"]
+        assert active.design_json["layers"] == active_design["layers"]
+        assert active.design_json["styleTokens"]["--kf-background-color"] == "#111111"
+        assert "scopedCss" in active.design_json["styleTokens"]
+        assert "position: absolute" not in active.design_json["styleTokens"]["scopedCss"]
 
 
 class TestDuplicateJobProtection:

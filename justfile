@@ -43,6 +43,13 @@ backend:
       -e DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-}" \
       -e AI_REQUEST_TIMEOUT_SECONDS="${AI_REQUEST_TIMEOUT_SECONDS:-500}" \
       -e AI_MAX_RETRIES="${AI_MAX_RETRIES:-1}" \
+      -e GEOCODING_ENABLED="${GEOCODING_ENABLED:-false}" \
+      -e GEOCODING_PROVIDER="${GEOCODING_PROVIDER:-nominatim}" \
+      -e NOMINATIM_ENDPOINT="${NOMINATIM_ENDPOINT:-https://nominatim.openstreetmap.org}" \
+      -e AMAP_API_KEY="${AMAP_API_KEY:-}" \
+      -e GEOCODING_TIMEOUT_SECONDS="${GEOCODING_TIMEOUT_SECONDS:-30}" \
+      -e GEOCODING_MAX_RETRIES="${GEOCODING_MAX_RETRIES:-2}" \
+      -e GEOCODING_RATE_LIMIT_PER_SECOND="${GEOCODING_RATE_LIMIT_PER_SECOND:-1.0}" \
       -v "$PWD/backend:/app" \
       -v /app/.venv \
       kinframe-backend-env:stage5 \
@@ -66,7 +73,10 @@ check-frontend-permissions:
     scripts/check-frontend-docker-permissions.sh
 
 create-admin username="admin" display_name="Administrator" password="password123":
-    docker run --rm --network host -e APP_ENV="${APP_ENV:-development}" -e APP_SECRET_KEY="${APP_SECRET_KEY:-change-me}" -e DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://kinframe:change-me@localhost:15432/kinframe}" -v "$PWD/backend:/app" -v /app/.venv kinframe-backend-env:stage5 uv run python scripts/create_admin.py --username "{{username}}" --display-name "{{display_name}}" --password "{{password}}"
+    docker run --rm --network host -e APP_ENV="${APP_ENV:-development}" -e APP_SECRET_KEY="${APP_SECRET_KEY:-change-me}" -e DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://kinframe:change-me@localhost:15432/kinframe}" -v "$PWD/backend:/app" -v /app/.venv kinframe-backend-env:stage5 uv run python scripts/create_admin.py --username "{{username}}" --display-name "{{display_name}}" --password "{{password}}" --role admin
+
+create-user username="member" display_name="Member" password="password123":
+    docker run --rm --network host -e APP_ENV="${APP_ENV:-development}" -e APP_SECRET_KEY="${APP_SECRET_KEY:-change-me}" -e DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://kinframe:change-me@localhost:15432/kinframe}" -v "$PWD/backend:/app" -v /app/.venv kinframe-backend-env:stage5 uv run python scripts/create_admin.py --username "{{username}}" --display-name "{{display_name}}" --password "{{password}}" --role member
 
 worker:
     #!/usr/bin/env bash
@@ -110,6 +120,38 @@ worker:
       kinframe-backend-env:stage5 \
       bash -lc 'uv run alembic upgrade head && uv run python -m app.workers.photo_processor ${WORKER_ARGS:-}'
 
+backfill-postprocessing:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker run --rm --network host \
+      -e APP_ENV="${APP_ENV:-development}" \
+      -e APP_SECRET_KEY="${APP_SECRET_KEY:-change-me}" \
+      -e DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://kinframe:change-me@localhost:15432/kinframe}" \
+      -e REDIS_URL="${REDIS_URL:-redis://localhost:16379/0}" \
+      -e MINIO_ENDPOINT="${MINIO_ENDPOINT:-localhost:19000}" \
+      -e MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-kinframe}" \
+      -e MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-change-me}" \
+      -e MINIO_BUCKET="${MINIO_BUCKET:-kinframe-photos}" \
+      -e AI_ENABLED="${AI_ENABLED:-false}" \
+      -e OLLAMA_ENDPOINT="${OLLAMA_ENDPOINT:-}" \
+      -e OLLAMA_VISION_MODEL="${OLLAMA_VISION_MODEL:-}" \
+      -e DEEPSEEK_BASE_URL="${DEEPSEEK_BASE_URL:-https://api.deepseek.com}" \
+      -e DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}" \
+      -e DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-}" \
+      -e AI_REQUEST_TIMEOUT_SECONDS="${AI_REQUEST_TIMEOUT_SECONDS:-500}" \
+      -e AI_MAX_RETRIES="${AI_MAX_RETRIES:-1}" \
+      -e GEOCODING_ENABLED="${GEOCODING_ENABLED:-false}" \
+      -e GEOCODING_PROVIDER="${GEOCODING_PROVIDER:-nominatim}" \
+      -e NOMINATIM_ENDPOINT="${NOMINATIM_ENDPOINT:-https://nominatim.openstreetmap.org}" \
+      -e AMAP_API_KEY="${AMAP_API_KEY:-}" \
+      -e GEOCODING_TIMEOUT_SECONDS="${GEOCODING_TIMEOUT_SECONDS:-30}" \
+      -e GEOCODING_MAX_RETRIES="${GEOCODING_MAX_RETRIES:-2}" \
+      -e GEOCODING_RATE_LIMIT_PER_SECOND="${GEOCODING_RATE_LIMIT_PER_SECOND:-1.0}" \
+      -v "$PWD/backend:/app" \
+      -v /app/.venv \
+      kinframe-backend-env:stage5 \
+      bash -lc 'uv run alembic upgrade head && uv run python scripts/backfill_photo_postprocessing.py'
+
 dev:
     just infra
     @echo "Start backend and frontend in separate terminals:"
@@ -130,6 +172,9 @@ accept-v0-2:
 
 accept-v0-3:
     scripts/v0.3-acceptance.sh
+
+accept-v0-4:
+    scripts/v0.4-acceptance.sh
 
 test-e2e:
     scripts/e2e-setup.sh

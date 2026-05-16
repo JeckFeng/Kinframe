@@ -163,6 +163,7 @@ export interface SlideDesign {
   templateParams: TemplateParams
   layers: Layer[]
   styleTokens: Record<string, string>
+  scopedCss?: string
   renderPolicy: RenderPolicy
   aiMeta?: SlideAiMeta
 }

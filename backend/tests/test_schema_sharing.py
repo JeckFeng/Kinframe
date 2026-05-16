@@ -11,6 +11,11 @@ FRONTEND_SCHEMA_PATH = (
     Path(__file__).parent.parent.parent.parent
     / "frontend" / "app" / "slide-renderer" / "configs" / "slide_design.schema.json"
 )
+BACKEND_TEMPLATES_PATH = Path(__file__).parent.parent / "app" / "schemas" / "slide_templates.json"
+FRONTEND_TEMPLATES_PATH = (
+    Path(__file__).parent.parent.parent.parent
+    / "frontend" / "app" / "slide-renderer" / "configs" / "slide_templates.json"
+)
 
 
 @pytest.fixture()
@@ -67,6 +72,12 @@ class TestSchemaCompleteness:
         pattern = schema["properties"]["styleTokens"]["propertyNames"]["pattern"]
         assert "--kf-" in pattern
 
+    def test_style_tokens_support_scoped_css_and_css_variables(self, schema):
+        """Schema should accept optional scopedCss and nested cssVariables input."""
+        style_tokens = schema["properties"]["styleTokens"]
+        assert "scopedCss" in style_tokens["properties"]
+        assert "cssVariables" in style_tokens["properties"]
+
     def test_layers_forbid_html_script(self, schema):
         """Layers must not have html or script keys."""
         not_clause = schema["properties"]["layers"]["items"]["not"]
@@ -111,6 +122,18 @@ class TestSchemaFrontendSync:
             frontend = json.load(f)
         assert backend == frontend, "Schemas diverge between frontend and backend"
 
+    def test_slide_template_configs_are_identical(self):
+        """Template configs must stay in sync between backend and frontend."""
+        repo_root = Path(__file__).parent.parent.parent
+        frontend_path = repo_root / "frontend" / "app" / "slide-renderer" / "configs" / "slide_templates.json"
+        if not frontend_path.exists():
+            pytest.skip("Frontend template config not accessible from this test environment")
+        with open(BACKEND_TEMPLATES_PATH) as f:
+            backend = json.load(f)
+        with open(frontend_path) as f:
+            frontend = json.load(f)
+        assert backend == frontend, "Template configs diverge between frontend and backend"
+
 
 class TestPythonValidatorLayerTypes:
     def test_validator_includes_texture_and_vignette(self):
@@ -118,6 +141,49 @@ class TestPythonValidatorLayerTypes:
         from app.schemas.slide_design_validator import ALLOWED_LAYER_TYPES
         assert "texture" in ALLOWED_LAYER_TYPES
         assert "vignette" in ALLOWED_LAYER_TYPES
+
+    def test_validator_normalizes_common_image_source_aliases(self):
+        """Python semantic validator should coerce common AI image-source aliases into valid values."""
+        from app.schemas.slide_design_validator import validate_slide_design_data
+
+        design = {
+            "photoId": "p1",
+            "templateId": "cinematic_fullscreen",
+            "templateParams": {},
+            "layers": [
+                {"type": "image", "zIndex": 1, "source": "photo", "rect": {"x": 0.05, "y": 0.05, "width": 0.9, "height": 0.7}},
+            ],
+            "styleTokens": {"--kf-bg": "#111"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+        }
+
+        validated = validate_slide_design_data(design, photo_id="p1")
+        assert validated["layers"][0]["source"] == "preview"
+
+    def test_validator_expands_props_based_layers(self):
+        """Python semantic validator should flatten AI-generated props payloads into the local layer contract."""
+        from app.schemas.slide_design_validator import validate_slide_design_data
+
+        design = {
+            "photoId": "p1",
+            "templateId": "magazine_left",
+            "templateParams": {},
+            "layers": [
+                {"type": "background", "zIndex": 0, "rect": {"x": 0, "y": 0, "width": 1, "height": 1}, "props": {"backgroundColor": "#faf6f0"}},
+                {"type": "image", "zIndex": 1, "rect": {"x": 0, "y": 0, "width": 0.6, "height": 1}, "props": {"source": "preview", "fit": "cover", "presetRef": "warm_amber_glow"}},
+                {"type": "text", "zIndex": 2, "rect": {"x": 0.65, "y": 0.1, "width": 0.3, "height": 0.8}, "props": {"role": "caption", "content": "湖畔古寺，宁静致远", "fontSize": 0.04, "color": "#3d2b1f", "textAlign": "left", "fontFamily": "serif"}},
+            ],
+            "styleTokens": {"--kf-bg": "#faf6f0"},
+            "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
+        }
+
+        validated = validate_slide_design_data(design, photo_id="p1")
+        assert validated["layers"][0]["style"]["color"] == "#faf6f0"
+        assert validated["layers"][1]["source"] == "preview"
+        assert validated["layers"][1]["fit"] == "cover"
+        assert validated["layers"][2]["role"] == "caption"
+        assert validated["layers"][2]["content"] == "湖畔古寺，宁静致远"
+        assert validated["layers"][2]["style"]["fontSize"] == "4.0vw"
 
 
 class TestSchemaValidationRoundTrip:

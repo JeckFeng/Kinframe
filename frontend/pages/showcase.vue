@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Grid3X3, Images, ListTodo, LogOut, Upload, Users } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Grid3X3, Images, ListTodo, LogOut, MapPin, Pause, Play, Upload, Users } from 'lucide-vue-next'
 import type { PhotoCategoryDefinition, ShowcaseCategory, ShowcasePhotoItem, ShowcaseResponse } from '~/types/api'
 import SlideRenderer from '~/app/slide-renderer/components/SlideRenderer.vue'
 import type { SlideDesign } from '~/app/slide-renderer/types'
@@ -30,6 +30,21 @@ const MOBILE_MAX_WIDTH = 428
 let touchStartX = 0
 let touchStartY = 0
 const SWIPE_THRESHOLD = 50
+
+const { isAutoPlaying, autoPlayInterval, toggleAutoPlay, setAutoPlayInterval, stopAutoPlay } = useAutoPlay({
+  onAdvance: () => nextPhoto(),
+})
+
+const indicatorVisible = ref(true)
+let hideIndicatorTimer: ReturnType<typeof setTimeout> | null = null
+
+function resetIndicatorVisibility() {
+  indicatorVisible.value = true
+  if (hideIndicatorTimer) clearTimeout(hideIndicatorTimer)
+  hideIndicatorTimer = setTimeout(() => {
+    indicatorVisible.value = false
+  }, 2000)
+}
 
 let hideTimer: ReturnType<typeof setTimeout> | null = null
 let wheelAccumulator = 0
@@ -201,13 +216,13 @@ function onTouchEnd(event: TouchEvent) {
 
   if (Math.max(absDx, absDy) < SWIPE_THRESHOLD) return
 
+  stopAutoPlay()
+
   if (absDx > absDy) {
-    // Horizontal swipe → photo navigation
     event.preventDefault()
     if (dx < 0) nextPhoto()
     else previousPhoto()
   } else {
-    // Vertical swipe → category navigation
     event.preventDefault()
     if (dy < 0) moveCategory(1)
     else moveCategory(-1)
@@ -216,17 +231,20 @@ function onTouchEnd(event: TouchEvent) {
 
 function onKeydown(event: KeyboardEvent) {
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
-  if (event.key === 'ArrowRight') { event.preventDefault(); nextPhoto() }
-  else if (event.key === 'ArrowLeft') { event.preventDefault(); previousPhoto() }
-  else if (event.key === 'ArrowDown') { event.preventDefault(); moveCategory(1) }
-  else if (event.key === 'ArrowUp') { event.preventDefault(); moveCategory(-1) }
+  if (event.key === 'ArrowRight') { event.preventDefault(); stopAutoPlay(); nextPhoto() }
+  else if (event.key === 'ArrowLeft') { event.preventDefault(); stopAutoPlay(); previousPhoto() }
+  else if (event.key === 'ArrowDown') { event.preventDefault(); stopAutoPlay(); moveCategory(1) }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); stopAutoPlay(); moveCategory(-1) }
   else if (event.key.toLowerCase() === 'c') { event.preventDefault(); toggleCategories() }
+  else if (event.key === ' ' || event.key === 'Space') { event.preventDefault(); toggleAutoPlay() }
+  else if (event.key.toLowerCase() === 'm') { event.preventDefault(); navigateTo('/map') }
 }
 
 function onMouseClick(event: MouseEvent) {
   if (isInteractiveElement(event.target)) return
   if (!activePhotos.value.length || transitionLocked.value) return
   event.preventDefault()
+  stopAutoPlay()
   previousPhoto()
 }
 
@@ -234,6 +252,7 @@ function onContextMenu(event: MouseEvent) {
   if (isInteractiveElement(event.target)) return
   if (!activePhotos.value.length || transitionLocked.value) return
   event.preventDefault()
+  stopAutoPlay()
   nextPhoto()
 }
 
@@ -241,6 +260,7 @@ function onWheel(event: WheelEvent) {
   if (isInteractiveElement(event.target)) return
   if (transitionLocked.value) return
   event.preventDefault()
+  stopAutoPlay()
   wheelAccumulator += event.deltaY
   if (wheelTimer !== null) clearTimeout(wheelTimer)
   wheelTimer = setTimeout(() => {
@@ -267,6 +287,7 @@ onMounted(() => {
   window.addEventListener('touchstart', onTouchStart, { passive: true })
   window.addEventListener('touchend', onTouchEnd, { passive: false })
   window.addEventListener('resize', checkMobile)
+  window.addEventListener('pointermove', resetIndicatorVisibility)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
@@ -276,8 +297,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('touchstart', onTouchStart)
   window.removeEventListener('touchend', onTouchEnd)
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('pointermove', resetIndicatorVisibility)
   if (hideTimer) clearTimeout(hideTimer)
   if (wheelTimer) clearTimeout(wheelTimer)
+  if (hideIndicatorTimer) clearTimeout(hideIndicatorTimer)
 })
 </script>
 
@@ -300,12 +323,38 @@ onBeforeUnmount(() => {
           <Images class="h-4 w-4 text-moss" aria-hidden="true" />
           KinFrame
         </NuxtLink>
+        <!-- Auto-play controls -->
+        <div class="flex items-center gap-1 rounded-md px-2 py-2 bg-neutral-950/35 backdrop-blur-xl border border-white/8 shadow-lg shadow-black/20">
+          <button
+            type="button"
+            class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10"
+            :title="isAutoPlaying ? '暂停自动播放' : '开始自动播放'"
+            @click="toggleAutoPlay"
+          >
+            <Pause v-if="isAutoPlaying" :size="18" />
+            <Play v-else :size="18" />
+          </button>
+          <div class="flex rounded-md bg-white/5 p-0.5">
+            <button
+              v-for="s in [3, 5, 8]" :key="s"
+              type="button"
+              @click="setAutoPlayInterval(s * 1000)"
+              :class="autoPlayInterval === s * 1000 ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white/80'"
+              class="px-2 py-1 text-xs rounded transition-colors"
+            >
+              {{ s }}s
+            </button>
+          </div>
+        </div>
         <nav class="flex items-center gap-2 rounded-md px-2 py-2 bg-neutral-950/35 backdrop-blur-xl border border-white/8 shadow-lg shadow-black/20">
           <NuxtLink to="/gallery" class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10" title="Gallery">
             <Grid3X3 class="h-4 w-4" aria-hidden="true" />
           </NuxtLink>
           <NuxtLink to="/upload" class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10" title="Upload">
             <Upload class="h-4 w-4" aria-hidden="true" />
+          </NuxtLink>
+          <NuxtLink to="/map" class="focus-ring inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md hover:bg-white/10" title="地图">
+            <MapPin class="h-4 w-4" aria-hidden="true" />
           </NuxtLink>
           <NuxtLink
             v-if="currentUser?.role === 'admin'"
@@ -440,6 +489,15 @@ onBeforeUnmount(() => {
             :location-text="locationSummary"
           />
         </Transition>
+        <!-- Auto-play progress bar -->
+        <div
+          v-if="isAutoPlaying"
+          class="absolute bottom-24 left-1/2 -translate-x-1/2 w-32 h-0.5 bg-white/10 rounded-full overflow-hidden z-30"
+          :class="indicatorVisible ? 'opacity-100' : 'opacity-0'"
+          style="transition: opacity 0.6s"
+        >
+          <div class="h-full bg-white/40 rounded-full animate-pulse" />
+        </div>
       </div>
       <div v-else class="text-center">
         <h1 class="text-2xl font-semibold">{{ activeCategoryMeta?.name || 'KinFrame' }}</h1>

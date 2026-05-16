@@ -17,7 +17,7 @@ const imageUrl = computed(() => {
 
 <template>
   <div
-    class="kf-layer kf-layer--image"
+    class="kf-layer kf-layer--image kf-photo-layer"
     :data-layer-id="layer.id || ''"
     :style="{
       position: 'absolute',
@@ -30,7 +30,7 @@ const imageUrl = computed(() => {
     <img
       :src="imageUrl"
       alt=""
-      class="kf-image"
+      class="kf-image kf-photo-frame"
       :style="{ objectFit: layer.fit || 'contain' }"
       loading="lazy"
       draggable="false"

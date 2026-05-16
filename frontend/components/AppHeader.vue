@@ -40,6 +40,14 @@ onMounted(async () => {
         </NuxtLink>
         <NuxtLink
           v-if="currentUser?.role === 'admin'"
+          to="/admin/photos"
+          class="focus-ring inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-stone-700 hover:bg-mist/60"
+        >
+          <Images class="h-4 w-4" aria-hidden="true" />
+          Photos
+        </NuxtLink>
+        <NuxtLink
+          v-if="currentUser?.role === 'admin'"
           to="/admin/users"
           class="focus-ring inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-stone-700 hover:bg-mist/60"
         >

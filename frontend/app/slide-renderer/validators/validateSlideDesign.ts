@@ -1,6 +1,7 @@
 import templatesConfig from '../configs/slide_templates.json'
 import whitelistConfig from '../configs/ai_css_whitelist.json'
 import presetsConfig from '../configs/design_presets.json'
+import { sanitizeScopedCss } from '../utils/cssSanitizer'
 import type {
   Fill,
   GradientStop,
@@ -362,13 +363,16 @@ function validateLayer(layer: unknown, index: number): Layer | null {
   }
 }
 
-function sanitizeStyleTokens(tokens: unknown): Record<string, string> {
+function sanitizeStyleTokens(tokens: unknown): { tokens: Record<string, string>; scopedCss?: string } {
   if (tokens === null || typeof tokens !== 'object') {
-    return {}
+    return { tokens: {} }
   }
   const input = tokens as Record<string, unknown>
+  const cssVariables = input.cssVariables && typeof input.cssVariables === 'object'
+    ? input.cssVariables as Record<string, unknown>
+    : input
   const output: Record<string, string> = {}
-  for (const [key, value] of Object.entries(input)) {
+  for (const [key, value] of Object.entries(cssVariables)) {
     if (!key.startsWith(ALLOWED_CSS_PREFIX)) {
       continue
     }
@@ -390,7 +394,16 @@ function sanitizeStyleTokens(tokens: unknown): Record<string, string> {
     }
     output[key] = value
   }
-  return output
+
+  let scopedCss: string | undefined
+  if (typeof input.scopedCss === 'string') {
+    const result = sanitizeScopedCss(input.scopedCss)
+    if (result.safeCss.trim()) {
+      scopedCss = result.safeCss
+    }
+  }
+
+  return { tokens: output, scopedCss }
 }
 
 /**
@@ -455,7 +468,7 @@ export function validateSlideDesign(value: unknown): SlideDesign {
   }
 
   // Sanitize style tokens
-  const styleTokens = sanitizeStyleTokens(doc.styleTokens)
+  const { tokens: styleTokens, scopedCss } = sanitizeStyleTokens(doc.styleTokens)
 
   const aiMeta = doc.aiMeta
   const validatedAiMeta = aiMeta && typeof aiMeta === 'object'
@@ -472,6 +485,7 @@ export function validateSlideDesign(value: unknown): SlideDesign {
     templateParams: doc.templateParams as SlideDesign['templateParams'],
     layers: validatedLayers,
     styleTokens,
+    scopedCss,
     renderPolicy: {
       mode: typeof rp.mode === 'string' ? rp.mode : undefined,
       allowHtml: false,

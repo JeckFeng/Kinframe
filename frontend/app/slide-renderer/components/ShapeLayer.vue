@@ -22,7 +22,7 @@ const shapeStyle = computed(() => {
 
 <template>
   <div
-    class="kf-layer kf-layer--shape"
+    class="kf-layer kf-layer--shape kf-shape-layer"
     :data-layer-id="layer.id || ''"
     :style="shapeStyle"
   />

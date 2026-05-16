@@ -24,7 +24,7 @@ const texStyle = computed(() => {
 
 <template>
   <div
-    class="kf-layer kf-layer--texture"
+    class="kf-layer kf-layer--texture kf-texture-layer"
     :data-layer-id="layer.id || ''"
     :style="texStyle"
   />

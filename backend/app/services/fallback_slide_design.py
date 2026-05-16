@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from app.models import Photo
+from app.schemas.slide_design_assets import get_template_definition
 from app.services.exif import ExtractedMetadata
 
 FALLBACK_TEMPLATES = {
@@ -36,48 +37,16 @@ def _template_for_category(category: str, photo_id: str = "") -> str:
     return candidates[idx]
 
 
-_TEMPLATE_STYLE_TOKENS: dict[str, dict[str, str]] = {
-    "cinematic_fullscreen": {
+def _template_style_tokens(template_id: str) -> dict[str, str]:
+    template = get_template_definition(template_id)
+    tokens = template.get("defaultStyleTokens") if isinstance(template, dict) else None
+    if isinstance(tokens, dict):
+        return {key: value for key, value in tokens.items() if isinstance(key, str) and isinstance(value, str)}
+    return {
         "--kf-background-color": "#111111",
         "--kf-text-color": "#f8fafc",
         "--kf-accent-color": "#d8b26e",
-    },
-    "warm_memory": {
-        "--kf-background-color": "#f7f5ef",
-        "--kf-text-color": "#171717",
-        "--kf-accent-color": "#8a9a5b",
-    },
-    "minimal_white": {
-        "--kf-background-color": "#f7f5ef",
-        "--kf-text-color": "#171717",
-        "--kf-accent-color": "#d8b26e",
-    },
-    "poetic_landscape": {
-        "--kf-background-color": "#0d1b2a",
-        "--kf-text-color": "#e0e1dd",
-        "--kf-accent-color": "#778da9",
-    },
-    "magazine_left": {
-        "--kf-background-color": "#faf9f6",
-        "--kf-text-color": "#2c2c2c",
-        "--kf-accent-color": "#b5838d",
-    },
-    "gallery_center": {
-        "--kf-background-color": "#f5f5f0",
-        "--kf-text-color": "#1a1a1a",
-        "--kf-accent-color": "#6b6b6b",
-    },
-    "dark_exhibition": {
-        "--kf-background-color": "#0a0a0a",
-        "--kf-text-color": "#d4d4d4",
-        "--kf-accent-color": "#c9a96e",
-    },
-    "pet_portrait": {
-        "--kf-background-color": "#fef9ef",
-        "--kf-text-color": "#3d2c2c",
-        "--kf-accent-color": "#d4a574",
-    },
-}
+    }
 
 
 def _image_rect(width: int | None, height: int | None) -> dict[str, float]:
@@ -142,7 +111,7 @@ def build_fallback_slide_design(photo: Photo, metadata: ExtractedMetadata) -> di
             "label": _timeline_label(metadata.taken_at),
         }
     )
-    tokens = _TEMPLATE_STYLE_TOKENS.get(template_id, _TEMPLATE_STYLE_TOKENS["warm_memory"])
+    tokens = _template_style_tokens(template_id)
     return {
         "photoId": photo.id,
         "templateId": template_id,

@@ -3,6 +3,7 @@
 from datetime import timedelta
 from io import BytesIO
 from typing import Protocol
+from urllib.parse import urlparse, urlunparse
 
 from minio import Minio
 
@@ -35,6 +36,7 @@ class MinioObjectStorage:
 
     def __init__(self, settings: Settings) -> None:
         self.bucket = settings.minio_bucket
+        self._settings = settings
         self._client = Minio(
             settings.minio_endpoint,
             access_key=settings.minio_access_key,
@@ -56,11 +58,17 @@ class MinioObjectStorage:
         )
 
     def presigned_get_url(self, object_key: str, expires_seconds: int = 900) -> str:
-        return self._client.presigned_get_object(
+        url = self._client.presigned_get_object(
             self.bucket,
             object_key,
             expires=timedelta(seconds=expires_seconds),
         )
+        if self._settings.minio_public_endpoint:
+            parsed = urlparse(url)
+            public = urlparse(self._settings.minio_public_endpoint)
+            parsed = parsed._replace(scheme=public.scheme, netloc=public.netloc)
+            url = urlunparse(parsed)
+        return url
 
     def download_bytes(self, object_key: str) -> bytes:
         response = self._client.get_object(self.bucket, object_key)

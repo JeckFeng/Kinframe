@@ -1,10 +1,9 @@
 """Tests for the health endpoint."""
 
-from fastapi.testclient import TestClient
-
 from app.api import health as health_api
 from app.main import create_app
 from app.schemas.health import ComponentHealth, HealthResponse
+from tests.http_client import TestClient
 
 
 def test_health_endpoint_returns_dependency_status(monkeypatch) -> None:
@@ -18,8 +17,8 @@ def test_health_endpoint_returns_dependency_status(monkeypatch) -> None:
 
     monkeypatch.setattr(health_api, "check_health", fake_check_health)
 
-    client = TestClient(create_app())
-    response = client.get("/api/health")
+    with TestClient(create_app()) as client:
+        response = client.get("/api/health")
 
     assert response.status_code == 200
     assert response.json() == {

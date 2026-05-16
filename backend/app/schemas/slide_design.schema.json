@@ -129,11 +129,25 @@
     },
     "styleTokens": {
       "type": "object",
+      "properties": {
+        "cssVariables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "pattern": "^--kf-"
+          }
+        },
+        "scopedCss": {
+          "type": "string"
+        }
+      },
       "additionalProperties": {
         "type": "string"
       },
       "propertyNames": {
-        "pattern": "^--kf-"
+        "pattern": "^(--kf-.*|cssVariables|scopedCss)$"
       }
     },
     "renderPolicy": {

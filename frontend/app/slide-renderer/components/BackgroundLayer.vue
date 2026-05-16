@@ -26,7 +26,7 @@ const bgStyle = computed(() => {
 
 <template>
   <div
-    class="kf-layer kf-layer--background"
+    class="kf-layer kf-layer--background kf-background-layer"
     :data-layer-id="layer.id || ''"
     :style="bgStyle"
   />

@@ -5,7 +5,6 @@ from datetime import datetime
 from io import BytesIO
 
 import pytest
-from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -18,6 +17,7 @@ from app.main import create_app
 from app.schemas.user import UserCreate
 from app.services.storage import ObjectStorage
 from app.services.users import create_user
+from tests.http_client import TestClient
 
 
 class FakeObjectStorage(ObjectStorage):
@@ -251,6 +251,26 @@ def test_upload_photo_accepts_ai_flags_and_showcase_visibility(client_storage_an
     assert payload["ai_category_enabled"] is True
     assert payload["include_in_showcase"] is False
     assert payload["time_source"] == "uploaded_at"
+
+
+def test_upload_without_category_marks_category_source_as_fallback(client_storage_and_session_factory) -> None:
+    client, _storage, session_factory = client_storage_and_session_factory
+    seed_user(session_factory, username="member")
+    login(client, "member")
+
+    response = client.post(
+        "/api/photos/upload",
+        data={
+            "ai_caption_enabled": "true",
+            "ai_category_enabled": "true",
+        },
+        files={"file": ("photo.jpg", image_bytes(), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["category"] == "life"
+    assert payload["category_source"] == "fallback"
 
 
 def test_default_categories_expose_prd_slugs(client_storage_and_session_factory) -> None:
@@ -489,6 +509,38 @@ def test_worker_generates_fallback_slide_design_for_ready_photo(
         if "rect" in layer:
             rect = layer["rect"]
             assert all(0 <= rect[key] <= 1 for key in ("x", "y", "width", "height"))
+
+
+def test_owner_can_hide_photo_from_showcase_without_removing_it_from_photo_list(
+    client_storage_and_session_factory,
+) -> None:
+    client, storage, session_factory = client_storage_and_session_factory
+    seed_user(session_factory, username="member")
+    login(client, "member")
+    photo = upload_test_photo(client)
+
+    process_one_photo_job(session_factory, storage)
+
+    showcase_before = client.get("/api/showcase")
+    assert showcase_before.status_code == 200
+    assert {item["photo"]["id"] for item in showcase_before.json()["photos"]} == {photo["id"]}
+
+    patch_response = client.patch(
+        f"/api/photos/{photo['id']}",
+        json={"include_in_showcase": False},
+    )
+
+    assert patch_response.status_code == 200
+    assert patch_response.json()["include_in_showcase"] is False
+
+    showcase_after = client.get("/api/showcase")
+    assert showcase_after.status_code == 200
+    assert showcase_after.json()["photos"] == []
+
+    photo_list = client.get("/api/photos")
+    assert photo_list.status_code == 200
+    assert [item["id"] for item in photo_list.json()] == [photo["id"]]
+    assert photo_list.json()[0]["include_in_showcase"] is False
 
 
 def test_fallback_slide_design_does_not_invent_caption_without_message(
