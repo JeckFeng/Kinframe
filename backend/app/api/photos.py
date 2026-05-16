@@ -42,6 +42,7 @@ from app.services.slide_designs import (
     get_latest_active_slide_design,
 )
 from app.services.storage import ObjectStorage
+from app.services.audit_logs import create_audit_log
 
 router = APIRouter(prefix="/api/photos", tags=["photos"])
 
@@ -391,7 +392,26 @@ def patch_photo(
     photo = _photo_or_404(db, photo_id)
     if not can_modify_photo(current_user, photo):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify this photo")
-    return PhotoRead.model_validate(update_photo(db, photo, payload))
+    previous_showcase_visibility = photo.include_in_showcase
+    updated = update_photo(db, photo, payload)
+    if (
+        payload.include_in_showcase is not None
+        and updated.include_in_showcase != previous_showcase_visibility
+    ):
+        action = "photo.unhide" if updated.include_in_showcase else "photo.hide"
+        create_audit_log(
+            db,
+            admin_id=current_user.id,
+            action=action,
+            target_type="photo",
+            target_id=updated.id,
+            detail={
+                "summary": "Photo shown in showcase" if updated.include_in_showcase else "Photo hidden from showcase",
+                "before": {"include_in_showcase": previous_showcase_visibility},
+                "after": {"include_in_showcase": updated.include_in_showcase},
+            },
+        )
+    return PhotoRead.model_validate(updated)
 
 
 @router.patch("/{photo_id}/message", response_model=PhotoRead)

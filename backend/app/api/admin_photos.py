@@ -32,6 +32,20 @@ def _photo_or_404(db: DbSession, photo_id: str):
     return photo
 
 
+def _photo_delete_snapshot(photo) -> dict:
+    return {
+        "owner_id": photo.owner_id,
+        "category": photo.category,
+        "status": photo.status,
+        "include_in_showcase": photo.include_in_showcase,
+        "final_caption": photo.final_caption,
+        "location_name": photo.location_name,
+        "object_key_original": photo.object_key_original,
+        "object_key_thumbnail": photo.object_key_thumbnail,
+        "object_key_preview": photo.object_key_preview,
+    }
+
+
 @router.get("", response_model=AdminPhotoListResponse)
 def get_admin_photos(
     db: DbSession,
@@ -154,6 +168,7 @@ def enqueue_photo_delete(
             "job_id": job.id,
             "job_type": PHOTO_JOB_TYPE_PHOTO_PURGE,
             "summary": f"Admin {admin.username} requested permanent photo deletion",
+            "photo_snapshot": _photo_delete_snapshot(photo),
         },
     )
     return {"photo_id": photo.id, "job_id": job.id, "job_type": PHOTO_JOB_TYPE_PHOTO_PURGE}

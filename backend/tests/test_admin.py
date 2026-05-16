@@ -1236,6 +1236,192 @@ class TestAdminCategories:
 # ── Tests: Audit Log API ───────────────────────────────────────────
 
 class TestAdminAuditLogs:
+    def test_hide_action_writes_audit_entry(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_audit_hide", role="admin")
+        _login(client, "admin_audit_hide")
+        owner_id = _seed_user(sf, username="owner_hide_audit")
+        photo_id = _create_photo(sf, owner_id, include_in_showcase=True)
+
+        _login(client, "owner_hide_audit")
+        hide_resp = client.patch(
+            f"/api/photos/{photo_id}",
+            json={"include_in_showcase": False},
+        )
+        assert hide_resp.status_code == 200
+
+        _login(client, "admin_audit_hide")
+        audit_resp = client.get(
+            f"/api/admin/audit-logs?action=photo.hide&target_type=photo&target_id={photo_id}"
+        )
+        assert audit_resp.status_code == 200
+        data = audit_resp.json()
+        assert data["total"] == 1
+        entry = data["items"][0]
+        assert entry["action"] == "photo.hide"
+        assert entry["target_id"] == photo_id
+        assert entry["admin_id"] == owner_id
+        assert entry["detail"]["summary"] == "Photo hidden from showcase"
+        assert entry["detail"]["before"]["include_in_showcase"] is True
+        assert entry["detail"]["after"]["include_in_showcase"] is False
+
+    def test_unhide_action_writes_audit_entry(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_audit_unhide", role="admin")
+        _login(client, "admin_audit_unhide")
+        owner_id = _seed_user(sf, username="owner_unhide_audit")
+        photo_id = _create_photo(sf, owner_id, include_in_showcase=False)
+
+        _login(client, "owner_unhide_audit")
+        unhide_resp = client.patch(
+            f"/api/photos/{photo_id}",
+            json={"include_in_showcase": True},
+        )
+        assert unhide_resp.status_code == 200
+
+        _login(client, "admin_audit_unhide")
+        audit_resp = client.get(
+            f"/api/admin/audit-logs?action=photo.unhide&target_type=photo&target_id={photo_id}"
+        )
+        assert audit_resp.status_code == 200
+        data = audit_resp.json()
+        assert data["total"] == 1
+        entry = data["items"][0]
+        assert entry["action"] == "photo.unhide"
+        assert entry["target_id"] == photo_id
+        assert entry["admin_id"] == owner_id
+        assert entry["detail"]["summary"] == "Photo shown in showcase"
+        assert entry["detail"]["before"]["include_in_showcase"] is False
+        assert entry["detail"]["after"]["include_in_showcase"] is True
+
+    def test_delete_requested_audit_keeps_photo_snapshot(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_delete_audit", role="admin")
+        _login(client, "admin_delete_audit")
+        owner_id = _seed_user(sf, username="owner_delete_audit")
+        photo_id = _create_photo(
+            sf,
+            owner_id,
+            category="travel",
+            final_caption="At the lake",
+            include_in_showcase=False,
+            location_name="Nyingchi",
+            status="ready",
+        )
+
+        delete_resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert delete_resp.status_code == 201
+        job_id = delete_resp.json()["job_id"]
+
+        audit_resp = client.get(
+            f"/api/admin/audit-logs?action=photo.delete_requested&target_type=photo&target_id={photo_id}"
+        )
+        assert audit_resp.status_code == 200
+        data = audit_resp.json()
+        assert data["total"] == 1
+        entry = data["items"][0]
+        assert entry["detail"]["job_id"] == job_id
+        assert entry["detail"]["job_type"] == "photo_purge"
+        snapshot = entry["detail"]["photo_snapshot"]
+        assert snapshot["owner_id"] == owner_id
+        assert snapshot["category"] == "travel"
+        assert snapshot["status"] == "ready"
+        assert snapshot["include_in_showcase"] is False
+        assert snapshot["final_caption"] == "At the lake"
+        assert snapshot["location_name"] == "Nyingchi"
+        assert snapshot["object_key_original"].endswith(".jpg")
+        assert snapshot["object_key_thumbnail"].endswith(".webp")
+
+    def test_photo_purge_success_writes_audit_entry(self, admin_test_client):
+        from app.services.photo_jobs import process_next_photo_job
+
+        client, storage, sf = admin_test_client
+        admin_id = _seed_user(sf, username="admin_delete_success_audit", role="admin")
+        _login(client, "admin_delete_success_audit")
+        owner_id = _seed_user(sf, username="owner_delete_success_audit")
+        photo_id = _create_photo(
+            sf,
+            owner_id,
+            category="travel",
+            final_caption="Purged memory",
+            include_in_showcase=False,
+            status="ready",
+        )
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            storage.objects[photo.object_key_original] = b"original"
+            storage.objects[photo.object_key_thumbnail] = b"thumbnail"
+            storage.objects[photo.object_key_preview] = b"preview"
+
+        delete_resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert delete_resp.status_code == 201
+        job_id = delete_resp.json()["job_id"]
+
+        with sf() as db:
+            assert process_next_photo_job(db, storage) is True
+
+        audit_resp = client.get(
+            f"/api/admin/audit-logs?action=photo.delete_succeeded&target_type=photo&target_id={photo_id}"
+        )
+        assert audit_resp.status_code == 200
+        data = audit_resp.json()
+        assert data["total"] == 1
+        entry = data["items"][0]
+        assert entry["admin_id"] == admin_id
+        assert entry["detail"]["job_id"] == job_id
+        assert entry["detail"]["summary"] == "Permanent photo deletion completed"
+        snapshot = entry["detail"]["photo_snapshot"]
+        assert snapshot["owner_id"] == owner_id
+        assert snapshot["category"] == "travel"
+        assert snapshot["final_caption"] == "Purged memory"
+
+    def test_photo_purge_failure_writes_audit_entry(self, admin_test_client):
+        from app.services.photo_jobs import process_next_photo_job
+
+        client, storage, sf = admin_test_client
+        admin_id = _seed_user(sf, username="admin_delete_failure_audit", role="admin")
+        _login(client, "admin_delete_failure_audit")
+        owner_id = _seed_user(sf, username="owner_delete_failure_audit")
+        photo_id = _create_photo(
+            sf,
+            owner_id,
+            category="pet",
+            final_caption="Will fail to purge",
+            include_in_showcase=True,
+            status="ready",
+        )
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            storage.objects[photo.object_key_original] = b"original"
+            storage.fail_delete_keys.add(photo.object_key_original)
+
+        delete_resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert delete_resp.status_code == 201
+        job_id = delete_resp.json()["job_id"]
+
+        with sf() as db:
+            assert process_next_photo_job(db, storage) is True
+
+        audit_resp = client.get(
+            f"/api/admin/audit-logs?action=photo.delete_failed&target_type=photo&target_id={photo_id}"
+        )
+        assert audit_resp.status_code == 200
+        data = audit_resp.json()
+        assert data["total"] == 1
+        entry = data["items"][0]
+        assert entry["admin_id"] == admin_id
+        assert entry["detail"]["job_id"] == job_id
+        assert entry["detail"]["summary"] == "Permanent photo deletion failed"
+        assert "delete failed for" in entry["detail"]["error_message"]
+        snapshot = entry["detail"]["photo_snapshot"]
+        assert snapshot["owner_id"] == owner_id
+        assert snapshot["category"] == "pet"
+        assert snapshot["final_caption"] == "Will fail to purge"
+
     def test_admin_actions_produce_audit_entries(self, admin_test_client):
         client, storage, sf = admin_test_client
         _seed_user(sf, username="admin", role="admin")

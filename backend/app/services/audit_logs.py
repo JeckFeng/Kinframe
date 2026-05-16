@@ -15,7 +15,7 @@ def utc_now() -> datetime:
 def create_audit_log(
     db: Session,
     *,
-    admin_id: str,
+    admin_id: str | None,
     action: str,
     target_type: str,
     target_id: str | None = None,

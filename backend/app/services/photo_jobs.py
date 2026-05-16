@@ -8,7 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Photo, PhotoProcessingJob, SlideDesign
+from app.models import AuditLog, Photo, PhotoProcessingJob, SlideDesign
+from app.services.audit_logs import create_audit_log
 from app.services.exif import ExtractedMetadata, extract_metadata
 from app.services.fallback_slide_design import build_fallback_slide_design
 from app.services.geocoding import GeocodingResult, GeocodingService
@@ -438,6 +439,73 @@ def create_photo_purge_job(
     )
 
 
+def _build_photo_delete_snapshot(photo: Photo) -> dict:
+    return {
+        "owner_id": photo.owner_id,
+        "category": photo.category,
+        "status": photo.status,
+        "include_in_showcase": photo.include_in_showcase,
+        "final_caption": photo.final_caption,
+        "location_name": photo.location_name,
+        "object_key_original": photo.object_key_original,
+        "object_key_thumbnail": photo.object_key_thumbnail,
+        "object_key_preview": photo.object_key_preview,
+    }
+
+
+def _get_delete_request_audit_context(
+    db: Session,
+    photo_id: str | None,
+) -> tuple[str | None, dict | None]:
+    if photo_id is None:
+        return None, None
+
+    entry = db.scalar(
+        select(AuditLog)
+        .where(
+            AuditLog.action == "photo.delete_requested",
+            AuditLog.target_type == "photo",
+            AuditLog.target_id == photo_id,
+        )
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+    )
+    if entry is None:
+        return None, None
+
+    detail = entry.detail if isinstance(entry.detail, dict) else {}
+    snapshot = detail.get("photo_snapshot") if isinstance(detail, dict) else None
+    return entry.admin_id, snapshot if isinstance(snapshot, dict) else None
+
+
+def _create_photo_delete_result_audit(
+    db: Session,
+    *,
+    action: str,
+    photo_id: str | None,
+    job_id: str,
+    summary: str,
+    error_message: str | None = None,
+    photo_snapshot: dict | None = None,
+) -> None:
+    admin_id, requested_snapshot = _get_delete_request_audit_context(db, photo_id)
+    detail: dict = {
+        "job_id": job_id,
+        "summary": summary,
+        "photo_snapshot": photo_snapshot or requested_snapshot,
+    }
+    if error_message is not None:
+        detail["error_message"] = error_message
+
+    create_audit_log(
+        db,
+        admin_id=admin_id,
+        action=action,
+        target_type="photo",
+        target_id=photo_id,
+        detail=detail,
+    )
+
+
 def _mark_photo_purge_job_succeeded(db: Session, job: PhotoProcessingJob) -> None:
     """Mark a purge job succeeded after the target photo has been removed."""
     now = utc_now()
@@ -472,11 +540,20 @@ def process_photo_purge_job(
     storage: ObjectStorage,
 ) -> bool:
     """Permanently delete photo objects and records while preserving the purge job row."""
+    target_photo_id = photo.id if photo is not None else job.photo_id
 
     if photo is None:
         _mark_photo_purge_job_succeeded(db, job)
+        _create_photo_delete_result_audit(
+            db,
+            action="photo.delete_succeeded",
+            photo_id=target_photo_id,
+            job_id=job.id,
+            summary="Permanent photo deletion completed",
+        )
         return True
 
+    photo_snapshot = _build_photo_delete_snapshot(photo)
     try:
         object_keys = [
             photo.object_key_original,
@@ -505,9 +582,26 @@ def process_photo_purge_job(
     except Exception as exc:
         db.rollback()
         _mark_photo_purge_job_failed(db, job, str(exc))
+        _create_photo_delete_result_audit(
+            db,
+            action="photo.delete_failed",
+            photo_id=target_photo_id,
+            job_id=job.id,
+            summary="Permanent photo deletion failed",
+            error_message=str(exc)[:2000],
+            photo_snapshot=photo_snapshot,
+        )
         return True
 
     _mark_photo_purge_job_succeeded(db, job)
+    _create_photo_delete_result_audit(
+        db,
+        action="photo.delete_succeeded",
+        photo_id=target_photo_id,
+        job_id=job.id,
+        summary="Permanent photo deletion completed",
+        photo_snapshot=photo_snapshot,
+    )
     return True
 
 
