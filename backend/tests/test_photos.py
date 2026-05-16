@@ -543,6 +543,66 @@ def test_owner_can_hide_photo_from_showcase_without_removing_it_from_photo_list(
     assert photo_list.json()[0]["include_in_showcase"] is False
 
 
+def test_owner_can_unhide_photo_back_into_showcase(
+    client_storage_and_session_factory,
+) -> None:
+    client, storage, session_factory = client_storage_and_session_factory
+    seed_user(session_factory, username="member")
+    login(client, "member")
+    photo = upload_test_photo(client)
+
+    process_one_photo_job(session_factory, storage)
+
+    hide_response = client.patch(
+        f"/api/photos/{photo['id']}",
+        json={"include_in_showcase": False},
+    )
+    assert hide_response.status_code == 200
+    assert hide_response.json()["include_in_showcase"] is False
+    assert client.get("/api/showcase").json()["photos"] == []
+
+    unhide_response = client.patch(
+        f"/api/photos/{photo['id']}",
+        json={"include_in_showcase": True},
+    )
+
+    assert unhide_response.status_code == 200
+    assert unhide_response.json()["include_in_showcase"] is True
+
+    showcase_after = client.get("/api/showcase")
+    assert showcase_after.status_code == 200
+    assert {item["photo"]["id"] for item in showcase_after.json()["photos"]} == {photo["id"]}
+
+
+def test_non_owner_cannot_change_showcase_visibility_of_others_photo(
+    client_storage_and_session_factory,
+) -> None:
+    client, storage, session_factory = client_storage_and_session_factory
+    seed_user(session_factory, username="owner")
+    seed_user(session_factory, username="viewer")
+
+    login(client, "owner")
+    photo = upload_test_photo(client)
+    process_one_photo_job(session_factory, storage)
+    client.cookies.clear()
+
+    login(client, "viewer")
+    patch_response = client.patch(
+        f"/api/photos/{photo['id']}",
+        json={"include_in_showcase": False},
+    )
+
+    assert patch_response.status_code == 403
+
+    detail_response = client.get(f"/api/photos/{photo['id']}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["include_in_showcase"] is True
+
+    showcase_response = client.get("/api/showcase")
+    assert showcase_response.status_code == 200
+    assert {item["photo"]["id"] for item in showcase_response.json()["photos"]} == {photo["id"]}
+
+
 def test_fallback_slide_design_does_not_invent_caption_without_message(
     client_storage_and_session_factory,
 ) -> None:

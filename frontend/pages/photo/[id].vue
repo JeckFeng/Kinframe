@@ -6,7 +6,7 @@ const route = useRoute()
 const { apiFetch } = useApi()
 const { formatBytes, formatDate } = useFormat()
 const { displayCategory } = usePhotoCategories()
-const { currentUser } = useAuth()
+const { currentUser, loadMe } = useAuth()
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const isOwner = computed(() => currentUser.value?.id === photo.value?.owner_id)
@@ -41,6 +41,7 @@ const regenScope = ref<RegenerateScope>('full')
 
 const editingMessage = ref(false)
 const messageSaving = ref(false)
+const showcaseSaving = ref(false)
 
 let processingPollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -207,6 +208,24 @@ async function saveMessage() {
   }
 }
 
+async function toggleShowcaseVisibility() {
+  if (!photo.value) return
+  showcaseSaving.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    photo.value = await apiFetch<Photo>(`/photos/${photo.value.id}`, {
+      method: 'PATCH',
+      body: { include_in_showcase: !photo.value.include_in_showcase },
+    })
+    successMessage.value = photo.value.include_in_showcase ? 'Photo is visible in showcase' : 'Photo hidden from showcase'
+  } catch (error) {
+    errorMessage.value = getApiErrorMessage(error)
+  } finally {
+    showcaseSaving.value = false
+  }
+}
+
 async function saveAdminPhoto() {
   if (!photo.value) return
   adminSaving.value = true
@@ -332,7 +351,12 @@ async function activateDesignVersion(designId: string) {
   }
 }
 
-onMounted(loadPhoto)
+onMounted(async () => {
+  if (!currentUser.value) {
+    await loadMe()
+  }
+  await loadPhoto()
+})
 onBeforeUnmount(stopProcessingPoll)
 </script>
 
@@ -423,6 +447,25 @@ onBeforeUnmount(stopProcessingPoll)
 
         <!-- Owner Message Edit -->
         <div v-if="isOwner" class="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+          <div class="mb-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-3">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="text-sm font-semibold text-stone-700">Showcase Visibility</h2>
+                <p class="mt-1 text-xs text-stone-600">
+                  {{ photo.include_in_showcase ? 'This photo currently appears in showcase.' : 'This photo is hidden from showcase.' }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 disabled:opacity-50"
+                :disabled="showcaseSaving"
+                @click="toggleShowcaseVisibility"
+              >
+                <Loader2 v-if="showcaseSaving" class="h-3.5 w-3.5 animate-spin" />
+                <span>{{ photo.include_in_showcase ? 'Hide from Showcase' : 'Show in Showcase' }}</span>
+              </button>
+            </div>
+          </div>
           <div class="mb-3 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-stone-700">Your Message</h2>
             <button

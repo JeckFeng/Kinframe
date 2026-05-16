@@ -6,6 +6,7 @@ import { test, expect } from '@playwright/test'
 const API_BASE = '/api'
 const ADMIN_USER = 'e2e_admin'
 const ADMIN_PASS = 'e2epass123'
+const MEMBER_PASS = 'memberpass123'
 
 /** Log in via API, return session cookie string for reuse. */
 async function getSessionCookie(request: any): Promise<string> {
@@ -31,9 +32,69 @@ async function loginViaApi(page: any, request: any) {
   ])
 }
 
+async function loginViaApiAs(page: any, request: any, username: string, password: string) {
+  const resp = await request.post(`${API_BASE}/auth/login`, {
+    data: { username, password },
+  })
+  expect(resp.status()).toBe(200)
+  const cookies = resp.headers()['set-cookie']
+  expect(cookies).toBeDefined()
+  await page.context().addCookies([
+    {
+      name: 'kinframe_session',
+      value: extractCookieValue(cookies, 'kinframe_session'),
+      domain: 'localhost',
+      path: '/',
+    },
+  ])
+}
+
 function extractCookieValue(setCookieHeader: string, name: string): string {
   const match = setCookieHeader.match(new RegExp(`${name}=([^;]+)`))
   return match ? match[1] : ''
+}
+
+async function createMemberUser(request: any, username: string, displayName: string) {
+  const cookie = await getSessionCookie(request)
+  const resp = await request.post(`${API_BASE}/admin/users`, {
+    headers: { cookie },
+    data: {
+      username,
+      display_name: displayName,
+      password: MEMBER_PASS,
+      role: 'member',
+      is_active: true,
+    },
+  })
+  expect([201, 409]).toContain(resp.status())
+}
+
+async function uploadPhotoAsMember(request: any, username: string, password: string) {
+  const loginResp = await request.post(`${API_BASE}/auth/login`, {
+    data: { username, password },
+  })
+  expect(loginResp.status()).toBe(200)
+  const cookie = loginResp.headers()['set-cookie']
+  expect(cookie).toBeDefined()
+  const baseImage = Buffer.from(
+    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBUQEBIVFRUVFRUVFRUVFRUVFRUVFRUXFhUVFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGxAQGy0lICYtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAgMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAdQf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQL/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=',
+    'base64',
+  )
+
+  const uploadResp = await request.post(`${API_BASE}/photos/upload`, {
+    headers: { cookie },
+    multipart: {
+      category: 'life',
+      user_message: 'Hide me from showcase',
+      file: {
+        name: `hide-toggle-${username}.jpg`,
+        mimeType: 'image/jpeg',
+        buffer: Buffer.concat([baseImage, Buffer.from(username)]),
+      },
+    },
+  })
+  expect(uploadResp.status()).toBe(201)
+  return uploadResp.json()
 }
 
 // ── 1. Login Flow ──────────────────────────────────────────────────
@@ -355,6 +416,27 @@ test.describe('Photo detail', () => {
     // Should show photo ID or metadata on the page
     const hasContent = await page.locator('text=/caption|message|taken|category/i').first().isVisible({ timeout: 5000 }).catch(() => false)
     expect(hasContent).toBe(true)
+  })
+
+  test('photo owner can hide and unhide showcase visibility from detail page', async ({ page, request }) => {
+    const username = `owner_hide_${Date.now()}`
+    await createMemberUser(request, username, 'Owner Hide')
+    const photo = await uploadPhotoAsMember(request, username, MEMBER_PASS)
+
+    await loginViaApiAs(page, request, username, MEMBER_PASS)
+    await page.goto(`/photo/${photo.id}`)
+    await page.waitForLoadState('networkidle')
+
+    const hideButton = page.getByRole('button', { name: 'Hide from Showcase' })
+    await expect(hideButton).toBeVisible({ timeout: 5000 })
+    await hideButton.click()
+
+    const showButton = page.getByRole('button', { name: 'Show in Showcase' })
+    await expect(showButton).toBeVisible({ timeout: 5000 })
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('button', { name: 'Show in Showcase' })).toBeVisible({ timeout: 5000 })
   })
 })
 
