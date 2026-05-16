@@ -176,6 +176,9 @@ accept-v0-3:
 accept-v0-4:
     scripts/v0.4-acceptance.sh
 
+accept-v0-5-delete:
+    scripts/v0.5-delete-acceptance.sh
+
 test-e2e:
     scripts/e2e-setup.sh
     cd frontend && npx playwright test --config playwright.config.ts

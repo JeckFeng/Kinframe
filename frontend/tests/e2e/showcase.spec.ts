@@ -2,6 +2,7 @@
  * v0.3-14: Playwright E2E tests for KinFrame showcase and core user flows.
  */
 import { test, expect } from '@playwright/test'
+import { deflateSync } from 'node:zlib'
 
 const API_BASE = '/api'
 const ADMIN_USER = 'e2e_admin'
@@ -12,6 +13,16 @@ const MEMBER_PASS = 'memberpass123'
 async function getSessionCookie(request: any): Promise<string> {
   const resp = await request.post(`${API_BASE}/auth/login`, {
     data: { username: ADMIN_USER, password: ADMIN_PASS },
+  })
+  expect(resp.status()).toBe(200)
+  const cookies = resp.headers()['set-cookie']
+  expect(cookies).toBeDefined()
+  return cookies
+}
+
+async function getSessionCookieForUser(request: any, username: string, password: string): Promise<string> {
+  const resp = await request.post(`${API_BASE}/auth/login`, {
+    data: { username, password },
   })
   expect(resp.status()).toBe(200)
   const cookies = resp.headers()['set-cookie']
@@ -33,12 +44,7 @@ async function loginViaApi(page: any, request: any) {
 }
 
 async function loginViaApiAs(page: any, request: any, username: string, password: string) {
-  const resp = await request.post(`${API_BASE}/auth/login`, {
-    data: { username, password },
-  })
-  expect(resp.status()).toBe(200)
-  const cookies = resp.headers()['set-cookie']
-  expect(cookies).toBeDefined()
+  const cookies = await getSessionCookieForUser(request, username, password)
   await page.context().addCookies([
     {
       name: 'kinframe_session',
@@ -52,6 +58,65 @@ async function loginViaApiAs(page: any, request: any, username: string, password
 function extractCookieValue(setCookieHeader: string, name: string): string {
   const match = setCookieHeader.match(new RegExp(`${name}=([^;]+)`))
   return match ? match[1] : ''
+}
+
+function crc32(buffer: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of buffer) {
+    crc ^= byte
+    for (let i = 0; i < 8; i += 1) {
+      const mask = -(crc & 1)
+      crc = (crc >>> 1) ^ (0xedb88320 & mask)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const typeBuffer = Buffer.from(type, 'ascii')
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length, 0)
+  const crc = Buffer.alloc(4)
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0)
+  return Buffer.concat([length, typeBuffer, data, crc])
+}
+
+function createUniquePng(label: string): Buffer {
+  const width = 16
+  const height = 12
+  const seed = Array.from(label).reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  const rows: Buffer[] = []
+  for (let y = 0; y < height; y += 1) {
+    const row = Buffer.alloc(1 + width * 3)
+    row[0] = 0
+    for (let x = 0; x < width; x += 1) {
+      const offset = 1 + x * 3
+      row[offset] = (seed + x * 17 + y * 5) % 256
+      row[offset + 1] = (seed * 3 + x * 7 + y * 11) % 256
+      row[offset + 2] = (255 - seed + x * 13 + y * 19) % 256
+    }
+    rows.push(row)
+  }
+
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8
+  ihdr[9] = 2
+  ihdr[10] = 0
+  ihdr[11] = 0
+  ihdr[12] = 0
+
+  const text = Buffer.from(`Comment\x00${label}`, 'utf8')
+  const idat = deflateSync(Buffer.concat(rows))
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('tEXt', text),
+    pngChunk('IDAT', idat),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ])
 }
 
 async function createMemberUser(request: any, username: string, displayName: string) {
@@ -70,41 +135,40 @@ async function createMemberUser(request: any, username: string, displayName: str
 }
 
 async function uploadPhotoAsMember(request: any, username: string, password: string) {
-  const loginResp = await request.post(`${API_BASE}/auth/login`, {
-    data: { username, password },
-  })
-  expect(loginResp.status()).toBe(200)
-  const cookie = loginResp.headers()['set-cookie']
-  expect(cookie).toBeDefined()
-  const baseImage = Buffer.from(
-    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBUQEBIVFRUVFRUVFRUVFRUVFRUVFRUXFhUVFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGxAQGy0lICYtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAgMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAdQf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQL/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=',
-    'base64',
-  )
-  const comment = Buffer.from(username, 'utf8')
-  const jpegComment = Buffer.concat([
-    Buffer.from([0xff, 0xfe, ((comment.length + 2) >> 8) & 0xff, (comment.length + 2) & 0xff]),
-    comment,
-  ])
-  const uniqueImage = Buffer.concat([
-    baseImage.subarray(0, baseImage.length - 2),
-    jpegComment,
-    baseImage.subarray(baseImage.length - 2),
-  ])
+  const cookie = await getSessionCookieForUser(request, username, password)
+  const uniqueImage = createUniquePng(username)
 
   const uploadResp = await request.post(`${API_BASE}/photos/upload`, {
     headers: { cookie },
     multipart: {
       category: 'life',
-      user_message: 'Hide me from showcase',
+      user_message: `Hide me from showcase ${username}`,
       file: {
-        name: `hide-toggle-${username}.jpg`,
-        mimeType: 'image/jpeg',
+        name: `hide-toggle-${username}.png`,
+        mimeType: 'image/png',
         buffer: uniqueImage,
       },
     },
   })
   expect(uploadResp.status()).toBe(201)
   return uploadResp.json()
+}
+
+async function waitForPhotoInShowcase(request: any, cookie: string, photoId: string, expectedVisible: boolean) {
+  await expect
+    .poll(async () => {
+      const resp = await request.get(`${API_BASE}/showcase`, {
+        headers: { cookie },
+      })
+      expect(resp.status()).toBe(200)
+      const data = await resp.json()
+      const ids = new Set((data.photos || []).map((item: any) => item.photo.id))
+      return ids.has(photoId)
+    }, {
+      timeout: 20000,
+      intervals: [250, 500, 1000],
+    })
+    .toBe(expectedVisible)
 }
 
 // ── 1. Login Flow ──────────────────────────────────────────────────
@@ -449,6 +513,35 @@ test.describe('Photo detail', () => {
     await expect(page.getByRole('button', { name: 'Show in Showcase' })).toBeVisible({ timeout: 5000 })
   })
 
+  test('photo owner hide/unhide updates showcase while keeping photo in gallery', async ({ page, request }) => {
+    const username = `owner_hide_flow_${Date.now()}`
+    await createMemberUser(request, username, 'Owner Hide Flow')
+    const photo = await uploadPhotoAsMember(request, username, MEMBER_PASS)
+    const memberCookie = await getSessionCookieForUser(request, username, MEMBER_PASS)
+    const caption = photo.final_caption || photo.user_message
+
+    await waitForPhotoInShowcase(request, memberCookie, photo.id, true)
+
+    await loginViaApiAs(page, request, username, MEMBER_PASS)
+    await page.goto(`/photo/${photo.id}`)
+    await page.waitForLoadState('networkidle')
+    await page.getByRole('button', { name: 'Hide from Showcase' }).click()
+    await expect(page.getByRole('button', { name: 'Show in Showcase' })).toBeVisible({ timeout: 5000 })
+
+    await waitForPhotoInShowcase(request, memberCookie, photo.id, false)
+
+    await page.goto('/gallery')
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(caption, { exact: false })).toBeVisible({ timeout: 10000 })
+
+    await page.goto(`/photo/${photo.id}`)
+    await page.waitForLoadState('networkidle')
+    await page.getByRole('button', { name: 'Show in Showcase' }).click()
+    await expect(page.getByRole('button', { name: 'Hide from Showcase' })).toBeVisible({ timeout: 5000 })
+
+    await waitForPhotoInShowcase(request, memberCookie, photo.id, true)
+  })
+
   test('admin sees permanent delete control on photo detail', async ({ page, request }) => {
     const cookie = await getSessionCookie(request)
     const showcaseResp = await request.get(`${API_BASE}/showcase`, {
@@ -494,6 +587,49 @@ test.describe('Photo detail', () => {
 
     await page.waitForURL('**/admin/photos?purged=1', { timeout: 20000 })
     await expect(page.locator('tbody tr').filter({ hasText: photoPrefix })).toHaveCount(0)
+  })
+
+  test('admin permanent delete removes photo from showcase, gallery, and stale detail fetches', async ({ page, request }) => {
+    const username = `admin_delete_full_${Date.now()}`
+    await createMemberUser(request, username, 'Admin Delete Full')
+    const photo = await uploadPhotoAsMember(request, username, MEMBER_PASS)
+    const adminCookie = await getSessionCookie(request)
+    const caption = photo.final_caption || photo.user_message
+
+    await waitForPhotoInShowcase(request, adminCookie, photo.id, true)
+
+    await loginViaApi(page, request)
+    await page.goto(`/photo/${photo.id}`)
+    await page.waitForLoadState('networkidle')
+
+    page.once('dialog', async (dialog) => {
+      await dialog.accept()
+    })
+    await page.getByRole('button', { name: 'Delete Permanently' }).click()
+    await page.waitForURL('**/admin/photos?purged=1', { timeout: 20000 })
+
+    await waitForPhotoInShowcase(request, adminCookie, photo.id, false)
+
+    const photosResp = await request.get(`${API_BASE}/photos`, {
+      headers: { cookie: adminCookie },
+    })
+    expect(photosResp.status()).toBe(200)
+    const photos = await photosResp.json()
+    expect(photos.some((item: any) => item.id === photo.id)).toBe(false)
+
+    const detailResp = await request.get(`${API_BASE}/photos/${photo.id}`, {
+      headers: { cookie: adminCookie },
+    })
+    expect(detailResp.status()).toBe(404)
+
+    const thumbnailResp = await request.get(`${API_BASE}/photos/${photo.id}/thumbnail-url`, {
+      headers: { cookie: adminCookie },
+    })
+    expect(thumbnailResp.status()).toBe(404)
+
+    await page.goto('/gallery')
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(caption, { exact: false })).toHaveCount(0)
   })
 })
 
