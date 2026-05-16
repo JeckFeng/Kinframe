@@ -188,6 +188,7 @@ def list_admin_photos(
     *,
     category: str | None = None,
     geocoding_status: str | None = None,
+    showcase_visibility: str | None = None,
     ai_status: str | None = None,
     design_source: str | None = None,
     failed_only: bool = False,
@@ -233,6 +234,10 @@ def list_admin_photos(
             continue
         if geocoding_status and photo.geocoding_status != geocoding_status:
             continue
+        if showcase_visibility == "visible" and not photo.include_in_showcase:
+            continue
+        if showcase_visibility == "hidden" and photo.include_in_showcase:
+            continue
 
         photo_jobs = jobs_by_photo.get(photo.id, [])
         latest_job = photo_jobs[0] if photo_jobs else None
@@ -257,6 +262,7 @@ def list_admin_photos(
                 category=photo.category,
                 final_caption=photo.final_caption,
                 user_message=photo.user_message,
+                include_in_showcase=photo.include_in_showcase,
                 status=photo.status,
                 uploaded_at=photo.uploaded_at,
                 taken_at=photo.taken_at,

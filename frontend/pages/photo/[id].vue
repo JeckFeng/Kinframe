@@ -10,6 +10,7 @@ const { currentUser, loadMe } = useAuth()
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const isOwner = computed(() => currentUser.value?.id === photo.value?.owner_id)
+const canManageShowcaseVisibility = computed(() => isOwner.value || isAdmin.value)
 
 const photo = ref<Photo | null>(null)
 const adminPhoto = ref<AdminPhoto | null>(null)
@@ -445,8 +446,7 @@ onBeforeUnmount(stopProcessingPoll)
           </p>
         </div>
 
-        <!-- Owner Message Edit -->
-        <div v-if="isOwner" class="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+        <div v-if="canManageShowcaseVisibility" class="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
           <div class="mb-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-3">
             <div class="flex items-center justify-between gap-3">
               <div>
@@ -466,6 +466,10 @@ onBeforeUnmount(stopProcessingPoll)
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Owner Message Edit -->
+        <div v-if="isOwner" class="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
           <div class="mb-3 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-stone-700">Your Message</h2>
             <button

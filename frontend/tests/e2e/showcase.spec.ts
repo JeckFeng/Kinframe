@@ -80,6 +80,16 @@ async function uploadPhotoAsMember(request: any, username: string, password: str
     '/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBUQEBIVFRUVFRUVFRUVFRUVFRUVFRUXFhUVFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGxAQGy0lICYtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAgMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAdQf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQL/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=',
     'base64',
   )
+  const comment = Buffer.from(username, 'utf8')
+  const jpegComment = Buffer.concat([
+    Buffer.from([0xff, 0xfe, ((comment.length + 2) >> 8) & 0xff, (comment.length + 2) & 0xff]),
+    comment,
+  ])
+  const uniqueImage = Buffer.concat([
+    baseImage.subarray(0, baseImage.length - 2),
+    jpegComment,
+    baseImage.subarray(baseImage.length - 2),
+  ])
 
   const uploadResp = await request.post(`${API_BASE}/photos/upload`, {
     headers: { cookie },
@@ -89,7 +99,7 @@ async function uploadPhotoAsMember(request: any, username: string, password: str
       file: {
         name: `hide-toggle-${username}.jpg`,
         mimeType: 'image/jpeg',
-        buffer: Buffer.concat([baseImage, Buffer.from(username)]),
+        buffer: uniqueImage,
       },
     },
   })
@@ -499,6 +509,63 @@ test.describe('Admin visibility', () => {
     expect(page.url()).toContain('/admin/photos')
     await expect(page.getByText('Photo Operations')).toBeVisible({ timeout: 5000 })
     await expect(page.getByText('Needs review')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('admin can filter and toggle showcase visibility from admin surfaces', async ({ page, request }) => {
+    const adminCookie = await getSessionCookie(request)
+    const adminPhotosResp = await request.get(`${API_BASE}/admin/photos?showcase_visibility=visible`, {
+      headers: { cookie: adminCookie },
+    })
+    expect(adminPhotosResp.status()).toBe(200)
+    const adminPhotos = await adminPhotosResp.json()
+    const item = Array.isArray(adminPhotos.items)
+      ? adminPhotos.items.find((candidate: any) => candidate.status === 'ready')
+      : null
+    test.skip(!item?.id, 'No ready visible admin photo available for admin visibility test')
+    const photo = item
+    const photoPrefix = photo.id.slice(0, 8)
+
+    await page.goto('/admin/photos')
+    await page.waitForLoadState('networkidle')
+
+    const photoRow = page.locator('tbody tr').filter({ hasText: photoPrefix }).first()
+    await expect(photoRow).toBeVisible({ timeout: 5000 })
+    await expect(photoRow.getByText('Visible')).toBeVisible({ timeout: 5000 })
+
+    await page.getByLabel('Showcase').selectOption('visible')
+    await page.getByRole('button', { name: 'Apply Filters' }).click()
+    await expect(photoRow).toBeVisible({ timeout: 5000 })
+
+    await photoRow.getByRole('button', { name: 'Hide' }).click()
+    await expect(photoRow).toHaveCount(0, { timeout: 5000 })
+
+    const hiddenShowcaseResp = await request.get(`${API_BASE}/showcase`, {
+      headers: { cookie: adminCookie },
+    })
+    expect(hiddenShowcaseResp.status()).toBe(200)
+    const hiddenShowcase = await hiddenShowcaseResp.json()
+    const hiddenIds = new Set((hiddenShowcase.photos || []).map((item: any) => item.photo.id))
+    expect(hiddenIds.has(photo.id)).toBe(false)
+
+    await page.getByLabel('Showcase').selectOption('hidden')
+    await page.getByRole('button', { name: 'Apply Filters' }).click()
+    await expect(photoRow).toBeVisible({ timeout: 5000 })
+    await expect(photoRow.getByText('Hidden')).toBeVisible({ timeout: 5000 })
+    await expect(photoRow.getByRole('button', { name: 'Show' })).toBeVisible({ timeout: 5000 })
+
+    await photoRow.getByRole('link', { name: new RegExp(photoPrefix) }).click()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('button', { name: 'Show in Showcase' })).toBeVisible({ timeout: 5000 })
+    await page.getByRole('button', { name: 'Show in Showcase' }).click()
+    await expect(page.getByRole('button', { name: 'Hide from Showcase' })).toBeVisible({ timeout: 5000 })
+
+    const visibleShowcaseResp = await request.get(`${API_BASE}/showcase`, {
+      headers: { cookie: adminCookie },
+    })
+    expect(visibleShowcaseResp.status()).toBe(200)
+    const visibleShowcase = await visibleShowcaseResp.json()
+    const visibleIds = new Set((visibleShowcase.photos || []).map((item: any) => item.photo.id))
+    expect(visibleIds.has(photo.id)).toBe(true)
   })
 
   test('admin photo detail shows design versions and recent jobs', async ({ page, request }) => {

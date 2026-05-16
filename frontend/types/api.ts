@@ -253,6 +253,7 @@ export interface AdminPhotoListItem {
   category: string
   final_caption: string | null
   user_message: string | null
+  include_in_showcase: boolean
   status: string
   uploaded_at: string
   taken_at: string

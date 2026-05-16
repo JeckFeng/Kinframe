@@ -144,7 +144,7 @@ def _create_photo(session_factory: sessionmaker[Session], owner_id: str, **kwarg
             ai_caption_enabled=kwargs.get("ai_caption_enabled", False),
             ai_category_enabled=kwargs.get("ai_category_enabled", False),
             ai_analysis_json=kwargs.get("ai_analysis_json"),
-            include_in_showcase=True,
+            include_in_showcase=kwargs.get("include_in_showcase", True),
             time_source="uploaded_at",
             bucket="test-photos",
             object_key_original=f"originals/2026/05/{photo_id}.jpg",
@@ -882,6 +882,7 @@ class TestAdminPhotoList:
             category="photography",
             geocoding_status="succeeded",
             status="ready",
+            include_in_showcase=False,
         )
 
         _create_slide_design(sf, photo_fallback, version=1, source="fallback", status="active", template_id="warm_memory")
@@ -914,6 +915,22 @@ class TestAdminPhotoList:
         ids = {item["id"] for item in items}
         assert photo_fallback in ids
         assert photo_ai not in ids
+
+        resp = client.get("/api/admin/photos?showcase_visibility=hidden")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == photo_manual
+        assert data["items"][0]["include_in_showcase"] is False
+
+        resp = client.get("/api/admin/photos?showcase_visibility=visible")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        ids = {item["id"] for item in items}
+        assert photo_fallback in ids
+        assert photo_ai in ids
+        assert photo_manual not in ids
+        assert all(item["include_in_showcase"] is True for item in items)
 
         resp = client.get("/api/admin/photos?category=pet&geocoding_status=succeeded")
         assert resp.status_code == 200

@@ -332,6 +332,7 @@ class AdminPhotoListItem(BaseModel):
     category: PhotoCategory
     final_caption: str | None = None
     user_message: str | None = None
+    include_in_showcase: bool
     status: str
     uploaded_at: datetime
     taken_at: datetime
