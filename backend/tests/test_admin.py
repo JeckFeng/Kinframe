@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image
+from sqlalchemy import select
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -16,7 +17,7 @@ from app.api.deps import get_object_storage
 from app.core.config import Settings, get_settings
 from app.core.database import Base, get_db
 from app.main import create_app
-from app.models import Category, Photo
+from app.models import Category, Photo, PhotoProcessingJob
 from app.schemas.user import UserCreate
 from app.services.categories import ensure_default_categories
 from app.services.storage import ObjectStorage
@@ -33,6 +34,7 @@ class FakeObjectStorage(ObjectStorage):
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
         self.content_types: dict[str, str] = {}
+        self.fail_delete_keys: set[str] = set()
 
     def ensure_bucket(self) -> None:
         pass
@@ -48,6 +50,8 @@ class FakeObjectStorage(ObjectStorage):
         return self.objects[object_key]
 
     def delete_object(self, object_key: str) -> None:
+        if object_key in self.fail_delete_keys:
+            raise RuntimeError(f"delete failed for {object_key}")
         self.objects.pop(object_key, None)
         self.content_types.pop(object_key, None)
 
@@ -937,6 +941,193 @@ class TestAdminPhotoList:
         data = resp.json()
         assert data["total"] == 1
         assert data["items"][0]["id"] == photo_ai
+
+
+class TestAdminPhotoDelete:
+    def test_admin_delete_enqueues_photo_purge_job(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_delete", role="admin")
+        _login(client, "admin_delete")
+        owner_id = _seed_user(sf, username="owner_delete")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["photo_id"] == photo_id
+        assert data["job_type"] == "photo_purge"
+        assert data["job_id"]
+
+        with sf() as db:
+            job = db.get(PhotoProcessingJob, data["job_id"])
+            assert job is not None
+            assert job.photo_id == photo_id
+            assert job.job_type == "photo_purge"
+            assert job.status == "pending"
+
+    def test_non_admin_cannot_enqueue_photo_purge_job(self, admin_test_client):
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="member_delete", role="member")
+        _login(client, "member_delete")
+        owner_id = _seed_user(sf, username="owner_delete_forbidden")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert resp.status_code == 403
+
+        with sf() as db:
+            jobs = list(
+                db.scalars(
+                    select(PhotoProcessingJob).where(
+                        PhotoProcessingJob.photo_id == photo_id,
+                        PhotoProcessingJob.job_type == "photo_purge",
+                    )
+                )
+            )
+            assert jobs == []
+
+    def test_photo_purge_job_success_deletes_objects_and_photo_but_keeps_purge_job(self, admin_test_client):
+        from app.models import SlideDesign
+        from app.services.photo_jobs import process_next_photo_job
+
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_delete_run", role="admin")
+        _login(client, "admin_delete_run")
+        owner_id = _seed_user(sf, username="owner_delete_run")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+        _create_slide_design(sf, photo_id, version=1, source="fallback", status="active")
+        _create_job(sf, photo_id, job_type="vision_analyze", status="succeeded", ai_provider="ollama")
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            storage.objects[photo.object_key_original] = b"original"
+            storage.objects[photo.object_key_preview] = b"preview"
+            storage.objects[photo.object_key_thumbnail] = b"thumbnail"
+            keys = [photo.object_key_original, photo.object_key_preview, photo.object_key_thumbnail]
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert resp.status_code == 201
+        purge_job_id = resp.json()["job_id"]
+
+        with sf() as db:
+            assert process_next_photo_job(db, storage) is True
+
+        with sf() as db:
+            assert db.get(Photo, photo_id) is None
+            assert list(db.scalars(select(SlideDesign).where(SlideDesign.photo_id == photo_id))) == []
+
+            purge_job = db.get(PhotoProcessingJob, purge_job_id)
+            assert purge_job is not None
+            assert purge_job.status == "succeeded"
+            assert purge_job.photo_id is None
+
+            remaining_jobs = list(db.scalars(select(PhotoProcessingJob).where(PhotoProcessingJob.id != purge_job_id)))
+            assert remaining_jobs == []
+
+        for key in keys:
+            assert key not in storage.objects
+
+    def test_photo_purge_job_failure_keeps_photo_and_records_error(self, admin_test_client):
+        from app.models import SlideDesign
+        from app.services.photo_jobs import process_next_photo_job
+
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_delete_fail", role="admin")
+        _login(client, "admin_delete_fail")
+        owner_id = _seed_user(sf, username="owner_delete_fail")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+        _create_slide_design(sf, photo_id, version=1, source="fallback", status="active")
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            storage.objects[photo.object_key_original] = b"original"
+            storage.objects[photo.object_key_preview] = b"preview"
+            storage.objects[photo.object_key_thumbnail] = b"thumbnail"
+            storage.fail_delete_keys.add(photo.object_key_original)
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert resp.status_code == 201
+        purge_job_id = resp.json()["job_id"]
+
+        with sf() as db:
+            assert process_next_photo_job(db, storage) is True
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            assert list(db.scalars(select(SlideDesign).where(SlideDesign.photo_id == photo_id))) != []
+
+            purge_job = db.get(PhotoProcessingJob, purge_job_id)
+            assert purge_job is not None
+            assert purge_job.status == "failed"
+            assert purge_job.photo_id == photo_id
+            assert "delete failed for" in (purge_job.error_message or "")
+
+    def test_failed_photo_purge_job_can_be_retried_without_changing_photo_status(self, admin_test_client):
+        from app.services.photo_jobs import process_next_photo_job
+
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_delete_retry", role="admin")
+        _login(client, "admin_delete_retry")
+        owner_id = _seed_user(sf, username="owner_delete_retry")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            storage.objects[photo.object_key_original] = b"original"
+            storage.fail_delete_keys.add(photo.object_key_original)
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert resp.status_code == 201
+        purge_job_id = resp.json()["job_id"]
+
+        with sf() as db:
+            assert process_next_photo_job(db, storage) is True
+
+        retry_resp = client.post(f"/api/admin/jobs/{purge_job_id}/retry")
+        assert retry_resp.status_code == 200
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            assert photo.status == "ready"
+
+            purge_job = db.get(PhotoProcessingJob, purge_job_id)
+            assert purge_job is not None
+            assert purge_job.status == "pending"
+            assert purge_job.error_message is None
+
+    def test_successful_photo_purge_job_remains_visible_in_admin_jobs(self, admin_test_client):
+        from app.services.photo_jobs import process_next_photo_job
+
+        client, storage, sf = admin_test_client
+        _seed_user(sf, username="admin_delete_jobs", role="admin")
+        _login(client, "admin_delete_jobs")
+        owner_id = _seed_user(sf, username="owner_delete_jobs")
+        photo_id = _create_photo(sf, owner_id, status="ready")
+
+        with sf() as db:
+            photo = db.get(Photo, photo_id)
+            assert photo is not None
+            storage.objects[photo.object_key_original] = b"original"
+
+        resp = client.post(f"/api/admin/photos/{photo_id}/delete")
+        assert resp.status_code == 201
+        purge_job_id = resp.json()["job_id"]
+
+        with sf() as db:
+            assert process_next_photo_job(db, storage) is True
+
+        jobs_resp = client.get("/api/admin/jobs?job_type=photo_purge")
+        assert jobs_resp.status_code == 200
+        items = jobs_resp.json()
+        job_item = next(item for item in items if item["id"] == purge_job_id)
+        assert job_item["status"] == "succeeded"
+        assert job_item["photo_id"] is None
+        assert job_item["photo_status"] is None
 
 
 # ── Tests: Admin Category API ──────────────────────────────────────

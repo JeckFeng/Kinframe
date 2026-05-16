@@ -21,7 +21,7 @@ class PhotoProcessingJob(Base):
     __tablename__ = "photo_processing_jobs"
     __table_args__ = (
         CheckConstraint(
-            "job_type in ('photo_ingest', 'slide_design_generate', 'reverse_geocode', 'vision_analyze', 'caption_regenerate', 'template_regenerate', 'css_regenerate', 'fallback_regenerate')",
+            "job_type in ('photo_ingest', 'slide_design_generate', 'reverse_geocode', 'vision_analyze', 'caption_regenerate', 'template_regenerate', 'css_regenerate', 'fallback_regenerate', 'photo_purge')",
             name="ck_photo_processing_jobs_job_type",
         ),
         CheckConstraint(
@@ -31,10 +31,10 @@ class PhotoProcessingJob(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    photo_id: Mapped[str] = mapped_column(
+    photo_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("photos.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("photos.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     job_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)

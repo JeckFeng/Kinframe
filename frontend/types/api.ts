@@ -133,7 +133,7 @@ export interface ShowcaseResponse {
 
 export interface AdminJobItem {
   id: string
-  photo_id: string
+  photo_id: string | null
   job_type: string
   status: string
   attempts: number
@@ -146,8 +146,8 @@ export interface AdminJobItem {
   started_at: string | null
   finished_at: string | null
   created_at: string
-  photo_category: string
-  photo_status: string
+  photo_category: string | null
+  photo_status: string | null
   photo_file_size: number | null
   photo_width: number | null
   photo_height: number | null

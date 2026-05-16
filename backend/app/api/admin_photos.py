@@ -127,6 +127,38 @@ def reset_caption(
     }
 
 
+@router.post("/{photo_id}/delete", status_code=status.HTTP_201_CREATED)
+def enqueue_photo_delete(
+    photo_id: str,
+    db: DbSession,
+    settings: AppSettings,
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    """Enqueue a background photo_purge job for permanent deletion."""
+    photo = _photo_or_404(db, photo_id)
+
+    from app.services.photo_jobs import PHOTO_JOB_TYPE_PHOTO_PURGE, create_photo_purge_job
+
+    job = create_photo_purge_job(
+        db,
+        photo_id=photo.id,
+        max_attempts=1,
+    )
+    create_audit_log(
+        db,
+        admin_id=admin.id,
+        action="photo.delete_requested",
+        target_type="photo",
+        target_id=photo_id,
+        detail={
+            "job_id": job.id,
+            "job_type": PHOTO_JOB_TYPE_PHOTO_PURGE,
+            "summary": f"Admin {admin.username} requested permanent photo deletion",
+        },
+    )
+    return {"photo_id": photo.id, "job_id": job.id, "job_type": PHOTO_JOB_TYPE_PHOTO_PURGE}
+
+
 @router.post("/{photo_id}/regenerate-design", status_code=status.HTTP_201_CREATED)
 def regenerate_design(
     photo_id: str,

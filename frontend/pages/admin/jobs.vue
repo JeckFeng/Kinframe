@@ -30,6 +30,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   template_regenerate: '模板重生成',
   css_regenerate: '样式重生成',
   fallback_regenerate: '兜底重生成',
+  photo_purge: '永久删除',
 }
 
 function formatJobStatus(status: string): string {
@@ -120,6 +121,7 @@ onMounted(() => {
           <option value="template_regenerate">Template Regenerate</option>
           <option value="css_regenerate">CSS Regenerate</option>
           <option value="fallback_regenerate">Fallback Regenerate</option>
+          <option value="photo_purge">Photo Purge</option>
         </select>
       </label>
       <label class="space-y-1 text-sm">
@@ -174,9 +176,14 @@ onMounted(() => {
             <td class="px-3 py-3 font-mono text-xs">{{ job.id.slice(0, 8) }}…</td>
             <td class="px-3 py-3">{{ formatJobType(job.job_type) }}</td>
             <td class="px-3 py-3">
-              <NuxtLink :to="`/photo/${job.photo_id}`" class="font-medium text-moss hover:underline">
-                {{ job.photo_category }} ({{ job.photo_width }}x{{ job.photo_height }})
+              <NuxtLink
+                v-if="job.photo_id"
+                :to="`/photo/${job.photo_id}`"
+                class="font-medium text-moss hover:underline"
+              >
+                {{ job.photo_category || 'photo' }}<span v-if="job.photo_width && job.photo_height"> ({{ job.photo_width }}x{{ job.photo_height }})</span>
               </NuxtLink>
+              <span v-else class="text-stone-500">Deleted photo</span>
             </td>
             <td class="px-3 py-3">
               <span

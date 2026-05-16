@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Photo, PhotoProcessingJob
+from app.models import Photo, PhotoProcessingJob, SlideDesign
 from app.services.exif import ExtractedMetadata, extract_metadata
 from app.services.fallback_slide_design import build_fallback_slide_design
 from app.services.geocoding import GeocodingResult, GeocodingService
@@ -39,6 +39,7 @@ PHOTO_JOB_TYPE_CAPTION_REGENERATE = "caption_regenerate"
 PHOTO_JOB_TYPE_TEMPLATE_REGENERATE = "template_regenerate"
 PHOTO_JOB_TYPE_CSS_REGENERATE = "css_regenerate"
 PHOTO_JOB_TYPE_FALLBACK_REGENERATE = "fallback_regenerate"
+PHOTO_JOB_TYPE_PHOTO_PURGE = "photo_purge"
 PHOTO_JOB_TYPE_METADATA_THUMBNAIL = PHOTO_JOB_TYPE_PHOTO_INGEST
 PHOTO_JOB_STATUS_PENDING = "pending"
 PHOTO_JOB_STATUS_RUNNING = "running"
@@ -420,6 +421,94 @@ def create_fallback_regenerate_job(
         job_type=PHOTO_JOB_TYPE_FALLBACK_REGENERATE,
         max_attempts=max_attempts,
     )
+
+
+def create_photo_purge_job(
+    db: Session,
+    photo_id: str,
+    *,
+    max_attempts: int,
+) -> PhotoProcessingJob:
+    """Enqueue a photo_purge job with duplicate protection."""
+    return create_next_job(
+        db,
+        photo_id,
+        job_type=PHOTO_JOB_TYPE_PHOTO_PURGE,
+        max_attempts=max_attempts,
+    )
+
+
+def _mark_photo_purge_job_succeeded(db: Session, job: PhotoProcessingJob) -> None:
+    """Mark a purge job succeeded after the target photo has been removed."""
+    now = utc_now()
+    job.photo_id = None
+    job.status = PHOTO_JOB_STATUS_SUCCEEDED
+    job.error_message = None
+    job.finished_at = now
+    job.updated_at = now
+    db.add(job)
+    db.commit()
+
+
+def _mark_photo_purge_job_failed(db: Session, job: PhotoProcessingJob, error_message: str) -> None:
+    """Record a purge failure without mutating photo state."""
+    now = utc_now()
+    if job.attempts >= job.max_attempts:
+        job.status = PHOTO_JOB_STATUS_FAILED
+        job.finished_at = now
+    else:
+        job.status = PHOTO_JOB_STATUS_PENDING
+        job.finished_at = None
+    job.error_message = error_message[:2000]
+    job.updated_at = now
+    db.add(job)
+    db.commit()
+
+
+def process_photo_purge_job(
+    db: Session,
+    job: PhotoProcessingJob,
+    photo: Photo | None,
+    storage: ObjectStorage,
+) -> bool:
+    """Permanently delete photo objects and records while preserving the purge job row."""
+
+    if photo is None:
+        _mark_photo_purge_job_succeeded(db, job)
+        return True
+
+    try:
+        object_keys = [
+            photo.object_key_original,
+            photo.object_key_preview,
+            photo.object_key_thumbnail,
+        ]
+        for object_key in object_keys:
+            if object_key:
+                storage.delete_object(object_key)
+
+        for design in db.scalars(select(SlideDesign).where(SlideDesign.photo_id == photo.id)).all():
+            db.delete(design)
+
+        for related_job in db.scalars(
+            select(PhotoProcessingJob).where(
+                PhotoProcessingJob.photo_id == photo.id,
+                PhotoProcessingJob.id != job.id,
+            )
+        ).all():
+            db.delete(related_job)
+
+        job.photo_id = None
+        db.add(job)
+        db.delete(photo)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        _mark_photo_purge_job_failed(db, job, str(exc))
+        return True
+
+    _mark_photo_purge_job_succeeded(db, job)
+    return True
 
 
 def process_vision_analyze_job(
@@ -960,6 +1049,9 @@ def process_next_photo_job(
     photo = db.get(Photo, job.photo_id)
 
     # ── Job-type dispatch ────────────────────────────────────────
+    if job.job_type == PHOTO_JOB_TYPE_PHOTO_PURGE:
+        return process_photo_purge_job(db, job, photo, storage)
+
     if job.job_type == PHOTO_JOB_TYPE_REVERSE_GEOCODE:
         if photo is None:
             mark_geocode_job_failed(db, job, None, "Photo not found")

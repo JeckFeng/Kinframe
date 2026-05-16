@@ -10,6 +10,7 @@ from app.api.deps import DbSession, get_current_admin
 from app.models import Photo, PhotoProcessingJob, User
 from app.services.audit_logs import create_audit_log
 from app.services.photo_jobs import (
+    PHOTO_JOB_TYPE_PHOTO_PURGE,
     PHOTO_JOB_STATUS_PENDING,
 )
 from app.services.photos import get_photo
@@ -21,7 +22,7 @@ class AdminJobItem(BaseModel):
     """Job with photo metadata for the admin jobs table."""
 
     id: str
-    photo_id: str
+    photo_id: str | None
     job_type: str
     status: str
     attempts: int
@@ -34,8 +35,8 @@ class AdminJobItem(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
-    photo_category: str
-    photo_status: str
+    photo_category: str | None
+    photo_status: str | None
     photo_file_size: int | None
     photo_width: int | None
     photo_height: int | None
@@ -60,7 +61,7 @@ def get_jobs(
 
     stmt = (
         select(PhotoProcessingJob, Photo)
-        .join(Photo, PhotoProcessingJob.photo_id == Photo.id)
+        .outerjoin(Photo, PhotoProcessingJob.photo_id == Photo.id)
         .order_by(PhotoProcessingJob.created_at.desc())
     )
     if photo_id:
@@ -89,13 +90,13 @@ def get_jobs(
             started_at=job.started_at,
             finished_at=job.finished_at,
             created_at=job.created_at,
-            photo_category=photo.category,
-            photo_status=photo.status,
-            photo_file_size=photo.file_size,
-            photo_width=photo.width,
-            photo_height=photo.height,
-            photo_taken_at=photo.taken_at,
-            photo_user_message=photo.user_message,
+            photo_category=photo.category if photo is not None else None,
+            photo_status=photo.status if photo is not None else None,
+            photo_file_size=photo.file_size if photo is not None else None,
+            photo_width=photo.width if photo is not None else None,
+            photo_height=photo.height if photo is not None else None,
+            photo_taken_at=photo.taken_at if photo is not None else None,
+            photo_user_message=photo.user_message if photo is not None else None,
         )
         for job, photo in rows
     ]
@@ -123,8 +124,8 @@ def retry_job(
     job.updated_at = now
     db.add(job)
 
-    photo = get_photo(db, job.photo_id)
-    if photo is not None:
+    photo = get_photo(db, job.photo_id) if job.photo_id is not None else None
+    if photo is not None and job.job_type != PHOTO_JOB_TYPE_PHOTO_PURGE:
         photo.status = "processing"
         photo.updated_at = now
         db.add(photo)
