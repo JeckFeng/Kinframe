@@ -130,6 +130,13 @@
 
 - `frontend/assets/css/showcase.css:270-284`
 
+时间文字外围外扩距离：
+
+| 参数 | 当前值 | 作用 |
+|---|---|---|
+| `--showcase-info-time-outset-top` | `calc(var(--showcase-info-time-font-size) * 1.5)` | 控制时间文本相对图片向上外扩的距离 |
+| `--showcase-info-time-outset-right` | `calc(var(--showcase-info-time-font-size) * 1.15)` | 控制时间文本相对图片向右外扩的距离 |
+
 ### 地点文字参数
 
 桌面端原始变量：
@@ -177,3 +184,10 @@
 地点文字实际使用位置：
 
 - `frontend/assets/css/showcase.css:286-300`
+
+地点文字外围外扩距离：
+
+| 参数 | 当前值 | 作用 |
+|---|---|---|
+| `--showcase-info-location-outset-left` | `calc(var(--showcase-info-location-font-size) * 1.15)` | 控制地点文本相对图片向左外扩的距离 |
+| `--showcase-info-location-outset-bottom` | `calc(var(--showcase-info-location-font-size) * 1.4)` | 控制地点文本相对图片向下外扩的距离 |

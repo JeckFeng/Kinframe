@@ -51,7 +51,7 @@ function makeShowcasePhotoItem(id: string): ShowcasePhotoItem {
 }
 
 describe('ShowcaseInfoOverlayItem', () => {
-  it('renders a background-bound info overlay frame with only time and location text', () => {
+  it('renders a background-bound surround frame so time and location can sit outside the image bounds', () => {
     const wrapper = mount(ShowcaseInfoOverlayItem, {
       props: {
         item: makeShowcasePhotoItem('photo-1'),
@@ -81,6 +81,8 @@ describe('ShowcaseInfoOverlayItem', () => {
     expect(shell.attributes('data-visible')).toBe('true')
     expect(shell.attributes('style')).toContain('--info-slot-width: 230px;')
     expect(shell.attributes('style')).toContain('--info-frame-offset-y: 144px;')
+    expect(wrapper.find('.showcase-info-surround').exists()).toBe(true)
+    expect(wrapper.find('.showcase-info-frame').exists()).toBe(true)
     expect(wrapper.get('.showcase-info-time').text()).toBe('2026.05.17')
     expect(wrapper.get('.showcase-info-location').text()).toBe('Shanghai, China')
     expect(wrapper.find('.showcase-info-caption').exists()).toBe(false)

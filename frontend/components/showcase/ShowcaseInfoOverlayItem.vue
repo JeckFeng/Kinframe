@@ -41,7 +41,8 @@ const resolvedLocationLabel = computed(() => props.locationLabel || props.item.p
     :data-visible="visible ? 'true' : 'false'"
     :style="shellStyle"
   >
-    <div class="showcase-info-frame">
+    <div class="showcase-info-surround">
+      <div class="showcase-info-frame" aria-hidden="true" />
       <time class="showcase-info-time">{{ formattedTimeLabel }}</time>
       <p class="showcase-info-location">{{ resolvedLocationLabel }}</p>
     </div>
