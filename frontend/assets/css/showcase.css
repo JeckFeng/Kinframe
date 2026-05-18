@@ -192,13 +192,6 @@
   transform: translate(-50%, -50%);
 }
 
-.showcase-mask-hole::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
 .showcase-mask-time {
   position: absolute;
   right: 0.9rem;
