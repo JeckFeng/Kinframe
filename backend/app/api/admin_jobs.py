@@ -12,6 +12,7 @@ from app.services.audit_logs import create_audit_log
 from app.services.photo_jobs import (
     PHOTO_JOB_TYPE_PHOTO_PURGE,
     PHOTO_JOB_STATUS_PENDING,
+    SUPPORTED_JOB_TYPES,
 )
 from app.services.photos import get_photo
 
@@ -28,10 +29,6 @@ class AdminJobItem(BaseModel):
     attempts: int
     max_attempts: int
     error_message: str | None
-    ai_provider: str | None
-    ai_model: str | None
-    ai_prompt_version: str | None
-    ai_raw_summary: str | None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
@@ -62,6 +59,7 @@ def get_jobs(
     stmt = (
         select(PhotoProcessingJob, Photo)
         .outerjoin(Photo, PhotoProcessingJob.photo_id == Photo.id)
+        .where(PhotoProcessingJob.job_type.in_(SUPPORTED_JOB_TYPES))
         .order_by(PhotoProcessingJob.created_at.desc())
     )
     if photo_id:
@@ -83,10 +81,6 @@ def get_jobs(
             attempts=job.attempts,
             max_attempts=job.max_attempts,
             error_message=job.error_message,
-            ai_provider=job.ai_provider,
-            ai_model=job.ai_model,
-            ai_prompt_version=job.ai_prompt_version,
-            ai_raw_summary=job.ai_raw_summary,
             started_at=job.started_at,
             finished_at=job.finished_at,
             created_at=job.created_at,
@@ -113,6 +107,8 @@ def retry_job(
     job = db.get(PhotoProcessingJob, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job.job_type not in SUPPORTED_JOB_TYPES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job type not supported")
     if job.status not in ("failed", "succeeded"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Job is not in a retryable state")
 

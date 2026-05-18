@@ -1,4 +1,4 @@
-"""Enqueue missing geocoding and AI follow-on jobs for existing ready photos."""
+"""Enqueue missing geocoding follow-on jobs for existing ready photos."""
 
 from pathlib import Path
 import sys
@@ -10,7 +10,6 @@ from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.services.geocoding import create_geocoding_service
 from app.services.photo_backfill import (
-    enqueue_missing_ai_jobs,
     enqueue_missing_geocoding_jobs,
 )
 
@@ -25,12 +24,7 @@ def main() -> int:
             max_attempts=settings.geocoding_max_retries,
             provider_name=geocoding.provider_name,
         )
-        ai_jobs = enqueue_missing_ai_jobs(
-            db,
-            enabled=settings.ai_enabled,
-            max_attempts=settings.ai_max_retries + 1,
-        )
-    print(f"Enqueued {geocoding_jobs} geocoding job(s) and {ai_jobs} AI job(s)")
+    print(f"Enqueued {geocoding_jobs} geocoding job(s)")
     return 0
 
 

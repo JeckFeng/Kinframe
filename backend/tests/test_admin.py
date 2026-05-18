@@ -87,9 +87,6 @@ def admin_test_client() -> Generator[
         session_expire_days=30,
         max_upload_size_mb=1,
         allowed_image_types=["image/jpeg", "image/png", "image/webp"],
-        ai_enabled=True,
-        deepseek_api_key="test-key",
-        deepseek_model="deepseek-v4-flash",
     )
     storage = FakeObjectStorage()
 
@@ -143,11 +140,7 @@ def _create_photo(session_factory: sessionmaker[Session], owner_id: str, **kwarg
             category_source=kwargs.get("category_source", "user"),
             caption_source=kwargs.get("caption_source", "none"),
             user_message=kwargs.get("user_message"),
-            ai_caption=kwargs.get("ai_caption"),
             final_caption=kwargs.get("final_caption"),
-            ai_caption_enabled=kwargs.get("ai_caption_enabled", False),
-            ai_category_enabled=kwargs.get("ai_category_enabled", False),
-            ai_analysis_json=kwargs.get("ai_analysis_json"),
             include_in_showcase=kwargs.get("include_in_showcase", True),
             time_source="uploaded_at",
             bucket="test-photos",
@@ -186,7 +179,7 @@ def _create_slide_design(
     source: str,
     status: str,
     template_id: str = "warm_memory",
-) -> str:
+    ) -> str:
     from app.schemas.photo import SlideDesignCreate
     from app.services.slide_designs import create_slide_design
 
@@ -217,6 +210,7 @@ def _create_slide_design(
         },
         "renderPolicy": {"allowHtml": False, "allowJavaScript": False},
     }
+    normalized_source = "fallback" if source == "ai" else source
     with session_factory() as db:
         design = create_slide_design(
             db,
@@ -224,7 +218,7 @@ def _create_slide_design(
             SlideDesignCreate(
                 version=version,
                 design_json=design,
-                source=source,
+                source=normalized_source,
                 status=status,
                 validation_errors=None,
             ),
@@ -239,9 +233,6 @@ def _create_job(
     job_type: str,
     status: str,
     error_message: str | None = None,
-    ai_provider: str | None = None,
-    ai_model: str | None = None,
-    ai_prompt_version: str | None = None,
 ) -> str:
     import uuid
     from datetime import datetime, timezone
@@ -259,9 +250,6 @@ def _create_job(
             attempts=1,
             max_attempts=2,
             error_message=error_message,
-            ai_provider=ai_provider,
-            ai_model=ai_model,
-            ai_prompt_version=ai_prompt_version,
             created_at=now,
             updated_at=now,
             started_at=now,
@@ -290,7 +278,6 @@ class TestAdminPhotoGet:
         owner_id = _seed_user(sf, username="owner")
         photo_id = _create_photo(
             sf, owner_id,
-            ai_analysis_json={"subject": "cat"},
             exif_json={"Make": "Canon"},
             geocoding_error="some error",
             location_name="Beijing",
@@ -299,7 +286,6 @@ class TestAdminPhotoGet:
         resp = client.get(f"/api/admin/photos/{photo_id}")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["ai_analysis_json"] == {"subject": "cat"}
         assert data["exif_json"] == {"Make": "Canon"}
         assert data["geocoding_error"] == "some error"
         assert data["caption_source"] == "none"
@@ -312,7 +298,6 @@ class TestAdminPhotoGet:
         owner_id = _seed_user(sf, username="owner2")
         photo_id = _create_photo(
             sf, owner_id,
-            ai_analysis_json={"subject": "dog"},
             exif_json={"Make": "Nikon"},
             geocoding_error="geo failed",
         )
@@ -321,7 +306,6 @@ class TestAdminPhotoGet:
         assert resp.status_code == 200
         data = resp.json()
         # Sensitive fields absent
-        assert "ai_analysis_json" not in data
         assert "exif_json" not in data
         assert "geocoding_error" not in data
         # Safe fields present
@@ -346,29 +330,23 @@ class TestAdminPhotoGet:
         photo_id = _create_photo(
             sf,
             owner_id,
-            ai_analysis_json={"subject": "lake"},
             final_caption="A framed memory",
             location_name="West Lake",
         )
         _create_slide_design(sf, photo_id, version=1, source="fallback", status="draft", template_id="warm_memory")
-        _create_slide_design(sf, photo_id, version=2, source="ai", status="active", template_id="gallery_center")
+        _create_slide_design(sf, photo_id, version=2, source="manual", status="active", template_id="gallery_center")
         _create_job(
             sf,
             photo_id,
-            job_type="slide_design_generate",
+            job_type="fallback_regenerate",
             status="failed",
-            error_message="quality score 2/5 below threshold",
-            ai_provider="deepseek",
-            ai_model="deepseek-v4-flash",
-            ai_prompt_version="slide_design.v1",
+            error_message="renderer validation failed",
         )
         _create_job(
             sf,
             photo_id,
-            job_type="vision_analyze",
+            job_type="reverse_geocode",
             status="succeeded",
-            ai_provider="ollama",
-            ai_model="qwen3-vl:8b",
         )
         patch_resp = client.patch(
             f"/api/admin/photos/{photo_id}",
@@ -379,15 +357,13 @@ class TestAdminPhotoGet:
         resp = client.get(f"/api/admin/photos/{photo_id}")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["active_design_source"] == "ai"
+        assert data["active_design_source"] == "manual"
         assert data["active_design_version"] == 2
         assert len(data["design_versions"]) == 2
         assert data["design_versions"][0]["version"] == 2
         assert data["design_versions"][0]["template_id"] == "gallery_center"
-        assert data["design_versions"][0]["quality_report"]["total_score"] >= 1
         assert len(data["recent_jobs"]) >= 2
-        assert data["recent_jobs"][0]["job_type"] in {"slide_design_generate", "vision_analyze"}
-        assert {job["ai_provider"] for job in data["recent_jobs"]} >= {"deepseek", "ollama"}
+        assert data["recent_jobs"][0]["job_type"] in {"fallback_regenerate", "reverse_geocode"}
         assert any(entry["action"] == "photo.update" for entry in data["recent_audit_logs"])
 
 
@@ -399,7 +375,7 @@ class TestAdminDesignVersions:
         owner_id = _seed_user(sf, username="owner_versions")
         photo_id = _create_photo(sf, owner_id, status="ready")
         _create_slide_design(sf, photo_id, version=1, source="fallback", status="draft", template_id="warm_memory")
-        _create_slide_design(sf, photo_id, version=2, source="ai", status="active", template_id="gallery_center")
+        _create_slide_design(sf, photo_id, version=2, source="fallback", status="active", template_id="gallery_center")
         manual_draft_id = _create_slide_design(sf, photo_id, version=3, source="manual", status="draft", template_id="minimal_white")
 
         resp = client.post(f"/api/admin/photos/{photo_id}/design-versions/{manual_draft_id}/activate")
@@ -430,7 +406,7 @@ class TestAdminDesignVersions:
         _login(client, "admin_manual")
         owner_id = _seed_user(sf, username="owner_manual")
         photo_id = _create_photo(sf, owner_id, status="ready")
-        _create_slide_design(sf, photo_id, version=1, source="ai", status="active", template_id="gallery_center")
+        _create_slide_design(sf, photo_id, version=1, source="fallback", status="active", template_id="gallery_center")
 
         payload = {
             "design_json": {
@@ -466,7 +442,7 @@ class TestAdminDesignVersions:
         resp = client.post(f"/api/admin/photos/{photo_id}/design-versions/manual", json=payload)
         assert resp.status_code == 201
         data = resp.json()
-        assert data["active_design_source"] == "ai"
+        assert data["active_design_source"] == "fallback"
         assert data["active_design_version"] == 1
         assert data["design_versions"][0]["source"] == "manual"
         assert data["design_versions"][0]["status"] == "draft"
@@ -474,7 +450,7 @@ class TestAdminDesignVersions:
 
         public_resp = client.get(f"/api/photos/{photo_id}/slide-design")
         assert public_resp.status_code == 200
-        assert public_resp.json()["source"] == "ai"
+        assert public_resp.json()["source"] == "fallback"
         assert public_resp.json()["version"] == 1
 
         audit_resp = client.get("/api/admin/audit-logs?action=design.manual_create")
@@ -488,7 +464,7 @@ class TestAdminDesignVersions:
         _login(client, "admin_invalid_manual")
         owner_id = _seed_user(sf, username="owner_invalid_manual")
         photo_id = _create_photo(sf, owner_id, status="ready")
-        _create_slide_design(sf, photo_id, version=1, source="ai", status="active", template_id="gallery_center")
+        _create_slide_design(sf, photo_id, version=1, source="fallback", status="active", template_id="gallery_center")
 
         resp = client.post(
             f"/api/admin/photos/{photo_id}/design-versions/manual",
@@ -595,7 +571,7 @@ class TestAdminPhotoResetCaption:
         assert data["final_caption"] == "Original user message"
         assert data["caption_source"] == "user"
 
-    def test_reset_caption_when_no_user_message_falls_back_to_ai(self, admin_test_client):
+    def test_reset_caption_when_no_user_message_clears_caption(self, admin_test_client):
         client, storage, sf = admin_test_client
         _seed_user(sf, username="admin", role="admin")
         _login(client, "admin")
@@ -603,8 +579,6 @@ class TestAdminPhotoResetCaption:
         photo_id = _create_photo(
             sf, owner_id,
             user_message=None,
-            ai_caption="AI generated caption",
-            ai_caption_enabled=True,
             final_caption="Admin override",
             caption_source="admin",
         )
@@ -612,8 +586,8 @@ class TestAdminPhotoResetCaption:
         resp = client.post(f"/api/admin/photos/{photo_id}/reset-caption")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["final_caption"] == "AI generated caption"
-        assert data["caption_source"] == "ai"
+        assert data["final_caption"] is None
+        assert data["caption_source"] == "none"
 
     def test_reset_caption_non_admin_rejected(self, admin_test_client):
         client, storage, sf = admin_test_client
@@ -627,18 +601,19 @@ class TestAdminPhotoResetCaption:
 
 
 class TestAdminRegenerateDesign:
-    def test_regenerate_creates_new_job(self, admin_test_client):
+    def test_regenerate_creates_fallback_job(self, admin_test_client):
         client, storage, sf = admin_test_client
         _seed_user(sf, username="admin", role="admin")
         _login(client, "admin")
         owner_id = _seed_user(sf, username="owner12")
         photo_id = _create_photo(sf, owner_id, status="ready")
 
-        resp = client.post(f"/api/admin/photos/{photo_id}/regenerate-design")
+        resp = client.post(f"/api/admin/photos/{photo_id}/regenerate", json={"scope": "fallback"})
         assert resp.status_code == 201
         data = resp.json()
         assert data["photo_id"] == photo_id
-        assert data["job_type"] == "slide_design_generate"
+        assert data["job_type"] == "fallback_regenerate"
+        assert data["scope"] == "fallback"
         assert data["job_id"] is not None
 
     def test_regenerate_non_admin_rejected(self, admin_test_client):
@@ -648,30 +623,13 @@ class TestAdminRegenerateDesign:
         owner_id = _seed_user(sf, username="owner13")
         photo_id = _create_photo(sf, owner_id)
 
-        resp = client.post(f"/api/admin/photos/{photo_id}/regenerate-design")
+        resp = client.post(f"/api/admin/photos/{photo_id}/regenerate", json={"scope": "fallback"})
         assert resp.status_code == 403
 
 
 # ── Tests: Admin Granular Regeneration (v0.3-11) ────────────────────
 
 class TestAdminGranularRegenerate:
-    def test_regenerate_full_scope_creates_job(self, admin_test_client):
-        client, storage, sf = admin_test_client
-        _seed_user(sf, username="admin", role="admin")
-        _login(client, "admin")
-        owner_id = _seed_user(sf, username="owner_reg1")
-        photo_id = _create_photo(sf, owner_id, status="ready")
-
-        resp = client.post(
-            f"/api/admin/photos/{photo_id}/regenerate",
-            json={"scope": "full"},
-        )
-        assert resp.status_code == 201
-        data = resp.json()
-        assert data["photo_id"] == photo_id
-        assert data["scope"] == "full"
-        assert data["job_id"] is not None
-
     def test_regenerate_fallback_scope_works(self, admin_test_client):
         client, storage, sf = admin_test_client
         _seed_user(sf, username="admin", role="admin")
@@ -690,60 +648,6 @@ class TestAdminGranularRegenerate:
         assert data["job_type"] == "fallback_regenerate"
         assert data["job_id"] is not None
 
-    def test_regenerate_full_when_ai_disabled_returns_error(self, admin_test_client):
-        client, storage, sf = admin_test_client
-        _seed_user(sf, username="admin", role="admin")
-        _login(client, "admin")
-        owner_id = _seed_user(sf, username="owner_reg3")
-        photo_id = _create_photo(sf, owner_id, status="ready")
-
-        # Get the settings from the app's dependency overrides
-        from app.core.config import get_settings as _get_settings
-        test_settings = None
-        for dep_fn, override_fn in client.app.dependency_overrides.items():
-            if dep_fn is _get_settings:
-                test_settings = override_fn()
-                break
-        assert test_settings is not None
-        old_key = test_settings.deepseek_api_key
-        test_settings.deepseek_api_key = ""
-
-        resp = client.post(
-            f"/api/admin/photos/{photo_id}/regenerate",
-            json={"scope": "full"},
-        )
-        # Restore
-        test_settings.deepseek_api_key = old_key
-
-        assert resp.status_code == 400
-        assert "AI" in resp.json()["detail"] or "disabled" in resp.json()["detail"].lower()
-
-    def test_regenerate_fallback_works_when_ai_disabled(self, admin_test_client):
-        client, storage, sf = admin_test_client
-        _seed_user(sf, username="admin", role="admin")
-        _login(client, "admin")
-        owner_id = _seed_user(sf, username="owner_reg4")
-        photo_id = _create_photo(sf, owner_id, status="ready")
-
-        # Get the settings from the app's dependency overrides
-        from app.core.config import get_settings as _get_settings
-        test_settings = None
-        for dep_fn, override_fn in client.app.dependency_overrides.items():
-            if dep_fn is _get_settings:
-                test_settings = override_fn()
-                break
-        assert test_settings is not None
-        old_key = test_settings.deepseek_api_key
-        test_settings.deepseek_api_key = ""
-
-        resp = client.post(
-            f"/api/admin/photos/{photo_id}/regenerate",
-            json={"scope": "fallback"},
-        )
-        test_settings.deepseek_api_key = old_key
-
-        assert resp.status_code == 201  # Fallback always works
-
     def test_regenerate_non_admin_rejected(self, admin_test_client):
         client, storage, sf = admin_test_client
         _seed_user(sf, username="member_reg", role="member")
@@ -753,7 +657,7 @@ class TestAdminGranularRegenerate:
 
         resp = client.post(
             f"/api/admin/photos/{photo_id}/regenerate",
-            json={"scope": "full"},
+            json={"scope": "fallback"},
         )
         assert resp.status_code == 403
 
@@ -779,7 +683,7 @@ class TestAdminGranularRegenerate:
 
         resp = client.post(
             f"/api/admin/photos/{photo_id}/regenerate",
-            json={"scope": "full"},
+            json={"scope": "fallback"},
         )
         assert resp.status_code == 201
 
@@ -792,7 +696,7 @@ class TestAdminGranularRegenerate:
             for e in entries
         )
 
-    def test_regenerate_template_scope_creates_job(self, admin_test_client):
+    def test_regenerate_removed_scope_returns_validation_error(self, admin_test_client):
         client, storage, sf = admin_test_client
         _seed_user(sf, username="admin", role="admin")
         _login(client, "admin")
@@ -803,11 +707,7 @@ class TestAdminGranularRegenerate:
             f"/api/admin/photos/{photo_id}/regenerate",
             json={"scope": "template"},
         )
-        assert resp.status_code == 201
-        data = resp.json()
-        assert data["scope"] == "template"
-        assert data["job_type"] == "template_regenerate"
-        assert data["job_id"] is not None
+        assert resp.status_code == 422
 
 
 class TestAdminJobs:
@@ -818,8 +718,7 @@ class TestAdminJobs:
         owner_id = _seed_user(sf, username="owner_jobs")
         photo_a = _create_photo(sf, owner_id, status="ready")
         photo_b = _create_photo(sf, owner_id, status="ready")
-        _create_job(sf, photo_a, job_type="vision_analyze", status="failed", error_message="vision timeout")
-        _create_job(sf, photo_a, job_type="slide_design_generate", status="succeeded", ai_provider="deepseek")
+        _create_job(sf, photo_a, job_type="photo_ingest", status="failed", error_message="ingest failed")
         _create_job(sf, photo_b, job_type="reverse_geocode", status="pending")
 
         resp = client.get("/api/admin/jobs?status=failed")
@@ -827,7 +726,7 @@ class TestAdminJobs:
         failed_rows = resp.json()
         assert len(failed_rows) == 1
         assert failed_rows[0]["photo_id"] == photo_a
-        assert failed_rows[0]["job_type"] == "vision_analyze"
+        assert failed_rows[0]["job_type"] == "photo_ingest"
 
         resp = client.get("/api/admin/jobs?job_type=reverse_geocode")
         assert resp.status_code == 200
@@ -838,8 +737,8 @@ class TestAdminJobs:
         resp = client.get(f"/api/admin/jobs?photo_id={photo_a}")
         assert resp.status_code == 200
         rows = resp.json()
-        assert len(rows) == 2
-        assert {row["job_type"] for row in rows} == {"vision_analyze", "slide_design_generate"}
+        assert len(rows) == 1
+        assert {row["job_type"] for row in rows} == {"photo_ingest"}
 
     def test_retry_job_writes_audit_log(self, admin_test_client):
         client, storage, sf = admin_test_client
@@ -847,7 +746,7 @@ class TestAdminJobs:
         _login(client, "admin_retry")
         owner_id = _seed_user(sf, username="owner_retry")
         photo_id = _create_photo(sf, owner_id, status="ready")
-        job_id = _create_job(sf, photo_id, job_type="vision_analyze", status="failed", error_message="timeout")
+        job_id = _create_job(sf, photo_id, job_type="photo_ingest", status="failed", error_message="timeout")
 
         resp = client.post(f"/api/admin/jobs/{job_id}/retry")
         assert resp.status_code == 200
@@ -872,11 +771,10 @@ class TestAdminPhotoList:
             geocoding_status="failed",
             status="ready",
         )
-        photo_ai = _create_photo(
+        photo_visible = _create_photo(
             sf,
             owner_id,
             category="pet",
-            ai_analysis_json={"subject": "cat"},
             geocoding_status="succeeded",
             status="ready",
         )
@@ -890,22 +788,15 @@ class TestAdminPhotoList:
         )
 
         _create_slide_design(sf, photo_fallback, version=1, source="fallback", status="active", template_id="warm_memory")
-        _create_slide_design(sf, photo_ai, version=1, source="ai", status="active", template_id="gallery_center")
+        _create_slide_design(sf, photo_visible, version=1, source="fallback", status="active", template_id="gallery_center")
         _create_slide_design(sf, photo_manual, version=1, source="manual", status="active", template_id="minimal_white")
-        _create_job(sf, photo_fallback, job_type="vision_analyze", status="failed", error_message="timeout")
-        _create_job(sf, photo_ai, job_type="vision_analyze", status="succeeded", ai_provider="ollama")
+        _create_job(sf, photo_fallback, job_type="reverse_geocode", status="failed", error_message="timeout")
 
         resp = client.get("/api/admin/photos?design_source=manual")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 1
         assert data["items"][0]["id"] == photo_manual
-
-        resp = client.get("/api/admin/photos?ai_status=analyzed")
-        assert resp.status_code == 200
-        items = resp.json()["items"]
-        assert len(items) == 1
-        assert items[0]["id"] == photo_ai
 
         resp = client.get("/api/admin/photos?failed_only=true")
         assert resp.status_code == 200
@@ -918,7 +809,8 @@ class TestAdminPhotoList:
         items = resp.json()["items"]
         ids = {item["id"] for item in items}
         assert photo_fallback in ids
-        assert photo_ai not in ids
+        assert photo_visible in ids
+        assert photo_manual not in ids
 
         resp = client.get("/api/admin/photos?showcase_visibility=hidden")
         assert resp.status_code == 200
@@ -932,7 +824,7 @@ class TestAdminPhotoList:
         items = resp.json()["items"]
         ids = {item["id"] for item in items}
         assert photo_fallback in ids
-        assert photo_ai in ids
+        assert photo_visible in ids
         assert photo_manual not in ids
         assert all(item["include_in_showcase"] is True for item in items)
 
@@ -940,7 +832,7 @@ class TestAdminPhotoList:
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 1
-        assert data["items"][0]["id"] == photo_ai
+        assert data["items"][0]["id"] == photo_visible
 
 
 class TestAdminPhotoDelete:
@@ -996,7 +888,7 @@ class TestAdminPhotoDelete:
         owner_id = _seed_user(sf, username="owner_delete_run")
         photo_id = _create_photo(sf, owner_id, status="ready")
         _create_slide_design(sf, photo_id, version=1, source="fallback", status="active")
-        _create_job(sf, photo_id, job_type="vision_analyze", status="succeeded", ai_provider="ollama")
+        _create_job(sf, photo_id, job_type="reverse_geocode", status="succeeded")
 
         with sf() as db:
             photo = db.get(Photo, photo_id)
@@ -1522,8 +1414,6 @@ class TestCaptionLogic:
         with sf() as db:
             photo = Photo(
                 user_message="User says",
-                ai_caption="AI says",
-                ai_caption_enabled=True,
                 final_caption="",
                 caption_source="none",
             )
@@ -1531,29 +1421,12 @@ class TestCaptionLogic:
             assert final == "User says"
             assert source == "user"
 
-    def test_compute_final_caption_ai_fallback(self, admin_test_client):
-        from app.services.photos import compute_final_caption
-        client, storage, sf = admin_test_client
-        with sf() as db:
-            photo = Photo(
-                user_message=None,
-                ai_caption="AI says",
-                ai_caption_enabled=True,
-                final_caption=None,
-                caption_source="none",
-            )
-            final, source = compute_final_caption(photo)
-            assert final == "AI says"
-            assert source == "ai"
-
     def test_compute_final_caption_none_when_no_sources(self, admin_test_client):
         from app.services.photos import compute_final_caption
         client, storage, sf = admin_test_client
         with sf() as db:
             photo = Photo(
                 user_message=None,
-                ai_caption=None,
-                ai_caption_enabled=False,
                 final_caption=None,
                 caption_source="none",
             )
@@ -1567,8 +1440,6 @@ class TestCaptionLogic:
         with sf() as db:
             photo = Photo(
                 user_message="User says",
-                ai_caption="AI says",
-                ai_caption_enabled=True,
                 final_caption="Admin says",
                 caption_source="admin",
             )

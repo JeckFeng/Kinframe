@@ -191,10 +191,6 @@ def test_upload_photo_stores_objects_and_metadata(client_storage_and_session_fac
     assert payload["final_caption"] == "A quiet morning"
     assert payload["status"] == "processing"
     assert payload["processing_message"] == "Photo uploaded and queued for processing"
-    assert payload["ai_caption"] is None
-    assert payload["ai_category_suggestion"] is None
-    assert payload["ai_caption_enabled"] is False
-    assert payload["ai_category_enabled"] is False
     assert payload["include_in_showcase"] is True
     assert payload["time_source"] == "uploaded_at"
     assert payload["width"] is None
@@ -221,13 +217,11 @@ def test_upload_photo_stores_objects_and_metadata(client_storage_and_session_fac
         "error_message": None,
         "slide_design_status": None,
         "slide_design_source": None,
-        "ai_provider": None,
-        "ai_model": None,
         "geocoding_status": "not_applicable",
     }
 
 
-def test_upload_photo_accepts_ai_flags_and_showcase_visibility(client_storage_and_session_factory) -> None:
+def test_upload_photo_respects_showcase_visibility(client_storage_and_session_factory) -> None:
     client, _storage, session_factory = client_storage_and_session_factory
     seed_user(session_factory, username="member")
     login(client, "member")
@@ -236,9 +230,7 @@ def test_upload_photo_accepts_ai_flags_and_showcase_visibility(client_storage_an
         "/api/photos/upload",
         data={
             "category": "photography",
-            "user_message": "Let AI help",
-            "ai_caption_enabled": "true",
-            "ai_category_enabled": "true",
+            "user_message": "Keep only fallback",
             "include_in_showcase": "false",
         },
         files={"file": ("photo.jpg", image_bytes(), "image/jpeg")},
@@ -247,8 +239,6 @@ def test_upload_photo_accepts_ai_flags_and_showcase_visibility(client_storage_an
     assert response.status_code == 201
     payload = response.json()
     assert payload["category"] == "photography"
-    assert payload["ai_caption_enabled"] is True
-    assert payload["ai_category_enabled"] is True
     assert payload["include_in_showcase"] is False
     assert payload["time_source"] == "uploaded_at"
 
@@ -260,10 +250,7 @@ def test_upload_without_category_marks_category_source_as_fallback(client_storag
 
     response = client.post(
         "/api/photos/upload",
-        data={
-            "ai_caption_enabled": "true",
-            "ai_category_enabled": "true",
-        },
+        data={},
         files={"file": ("photo.jpg", image_bytes(), "image/jpeg")},
     )
 
@@ -356,7 +343,7 @@ def test_latest_active_slide_design_is_returned_for_photo(client_storage_and_ses
         f"/api/photos/{photo['id']}/slide-designs",
         json={
             "version": 2,
-            "source": "ai",
+            "source": "manual",
             "status": "draft",
             "design_json": valid_slide_design_json(photo["id"], "minimal_white"),
             "validation_errors": ["missing main image layer"],

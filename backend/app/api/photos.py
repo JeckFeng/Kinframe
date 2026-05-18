@@ -39,7 +39,7 @@ from app.services.images import heic_conversion_available
 from app.services.slide_designs import (
     DuplicateSlideDesignVersionError,
     create_slide_design,
-    get_latest_active_slide_design,
+    get_latest_display_slide_design,
 )
 from app.services.storage import ObjectStorage
 from app.services.audit_logs import create_audit_log
@@ -116,8 +116,6 @@ async def _upload_one_photo(
     category: str,
     category_provided: bool,
     user_message: str | None,
-    ai_caption_enabled: bool,
-    ai_category_enabled: bool,
     include_in_showcase: bool,
 ) -> PhotoRead:
     content_type = file.content_type or "application/octet-stream"
@@ -158,12 +156,8 @@ async def _upload_one_photo(
         category=category,
         category_source="user" if category_provided else "fallback",
         user_message=user_message,
-        ai_caption=None,
         final_caption=user_message,
         caption_source="user" if user_message else "none",
-        ai_category_suggestion=None,
-        ai_caption_enabled=ai_caption_enabled,
-        ai_category_enabled=ai_category_enabled,
         include_in_showcase=include_in_showcase,
         time_source="uploaded_at",
         bucket=storage.bucket,
@@ -208,8 +202,6 @@ async def upload_photo(
     file: UploadFile = File(...),
     category: str | None = Form(default=None),
     user_message: str | None = Form(default=None),
-    ai_caption_enabled: bool = Form(default=False),
-    ai_category_enabled: bool = Form(default=False),
     include_in_showcase: bool = Form(default=True),
 ) -> PhotoRead:
     """Upload a photo original and enqueue asynchronous processing."""
@@ -226,8 +218,6 @@ async def upload_photo(
             category=category,
             category_provided=category_provided,
             user_message=user_message,
-            ai_caption_enabled=ai_caption_enabled,
-            ai_category_enabled=ai_category_enabled,
             include_in_showcase=include_in_showcase,
         )
     except UploadPhotoError as exc:
@@ -243,8 +233,6 @@ async def batch_upload_photos(
     files: list[UploadFile] = File(...),
     category: str | None = Form(default=None),
     user_message: str | None = Form(default=None),
-    ai_caption_enabled: bool = Form(default=False),
-    ai_category_enabled: bool = Form(default=False),
     include_in_showcase: bool = Form(default=True),
 ) -> PhotoBatchUploadResponse:
     """Upload up to 10 photos and return independent per-file results."""
@@ -270,8 +258,6 @@ async def batch_upload_photos(
                 category=category,
                 category_provided=category_provided,
                 user_message=user_message,
-                ai_caption_enabled=ai_caption_enabled,
-                ai_category_enabled=ai_category_enabled,
                 include_in_showcase=include_in_showcase,
             )
             results.append(PhotoBatchUploadItem(filename=filename, success=True, photo=photo, error=None))
@@ -336,7 +322,7 @@ def get_slide_design(
     """Return the latest active slide design for a photo."""
 
     _photo_or_404(db, photo_id)
-    design = get_latest_active_slide_design(db, photo_id)
+    design = get_latest_display_slide_design(db, photo_id)
     if design is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slide design not found")
     return SlideDesignRead.model_validate(design)
@@ -363,7 +349,7 @@ def get_processing_status(
 
     photo = _photo_or_404(db, photo_id)
     job = get_latest_job_for_photo(db, photo_id)
-    design = get_latest_active_slide_design(db, photo_id)
+    design = get_latest_display_slide_design(db, photo_id)
     return PhotoProcessingStatusResponse(
         photo_id=photo.id,
         photo_status=photo.status,
@@ -374,8 +360,6 @@ def get_processing_status(
         error_message=job.error_message if job is not None else None,
         slide_design_status=design.status if design is not None else None,
         slide_design_source=design.source if design is not None else None,
-        ai_provider=job.ai_provider if job is not None else None,
-        ai_model=job.ai_model if job is not None else None,
         geocoding_status=photo.geocoding_status,
     )
 

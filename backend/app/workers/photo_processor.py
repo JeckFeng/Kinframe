@@ -27,8 +27,6 @@ def run_once() -> bool:
             preview_max_size_px=settings.preview_max_size_px,
             geocoding=geocoding,
             geocoding_max_attempts=settings.geocoding_max_retries,
-            ai_enabled=settings.ai_enabled,
-            ai_max_attempts=settings.ai_max_retries + 1,
         )
 
 

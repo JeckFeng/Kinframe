@@ -159,15 +159,6 @@
         "allowHtml": { "const": false },
         "allowJavaScript": { "const": false }
       }
-    },
-    "aiMeta": {
-      "type": "object",
-      "properties": {
-        "provider": { "type": "string" },
-        "model": { "type": "string" },
-        "promptVersion": { "type": "string" },
-        "generatedAt": { "type": "string" }
-      }
     }
   }
 }

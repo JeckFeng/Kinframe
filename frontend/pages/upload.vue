@@ -7,8 +7,6 @@ const { formatBytes } = useFormat()
 const fileInput = ref<HTMLInputElement | null>(null)
 const category = ref<string>('')
 const userMessage = ref('')
-const aiCaptionEnabled = ref(false)
-const aiCategoryEnabled = ref(false)
 const includeInShowcase = ref(true)
 const selectedFiles = ref<File[]>([])
 const pending = ref(false)
@@ -24,7 +22,6 @@ const STATUS_LABELS: Record<string, string> = {
   processing: '正在解析照片信息…',
   exif_parsed: '已解析拍摄信息',
   preview_generated: '正在生成预览…',
-  vision_analyzed: 'AI 分析已完成',
   design_generated: '正在生成幻灯片设计…',
   ready: '已完成，已加入 PPT 放映 ✓',
   failed: '处理失败',
@@ -115,8 +112,6 @@ async function submitUpload() {
   if (userMessage.value.trim()) {
     formData.set('user_message', userMessage.value.trim())
   }
-  formData.set('ai_caption_enabled', String(aiCaptionEnabled.value))
-  formData.set('ai_category_enabled', String(aiCategoryEnabled.value))
   formData.set('include_in_showcase', String(includeInShowcase.value))
 
   pending.value = true
@@ -172,7 +167,7 @@ onBeforeUnmount(stopProcessingPoll)
       <label class="block">
         <span class="mb-1 block text-sm font-medium text-stone-700">Category</span>
         <select v-model="category" class="focus-ring w-full rounded-md border border-stone-300 bg-white px-3 py-2">
-          <option value="">暂不选择（待 AI 自动分类）</option>
+          <option value="">暂不选择</option>
           <option value="life">生活照</option>
           <option value="photography">摄影照</option>
           <option value="pet">宠物照</option>
@@ -189,14 +184,6 @@ onBeforeUnmount(stopProcessingPoll)
       </label>
 
       <div class="space-y-3 rounded-md border border-stone-200 bg-stone-50 p-4">
-        <label class="flex items-center justify-between gap-3">
-          <span class="text-sm text-stone-700">AI 文案</span>
-          <input v-model="aiCaptionEnabled" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-moss focus:ring-moss">
-        </label>
-        <label class="flex items-center justify-between gap-3">
-          <span class="text-sm text-stone-700">AI 自动分类</span>
-          <input v-model="aiCategoryEnabled" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-moss focus:ring-moss">
-        </label>
         <label class="flex items-center justify-between gap-3">
           <span class="text-sm text-stone-700">加入 PPT 放映</span>
           <input v-model="includeInShowcase" type="checkbox" class="h-4 w-4 rounded border-stone-300 text-moss focus:ring-moss">

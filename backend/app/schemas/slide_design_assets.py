@@ -29,12 +29,6 @@ def load_design_presets() -> dict[str, Any]:
 def load_layer_primitives() -> dict[str, Any]:
     return _load_json("layer_primitives.json")
 
-
-@lru_cache
-def load_ai_css_whitelist() -> dict[str, Any]:
-    return _load_json("ai_css_whitelist.json")
-
-
 def get_template_definitions() -> list[dict[str, Any]]:
     return list(load_slide_templates().get("templates", []))
 

@@ -1,6 +1,6 @@
 # KinFrame
 
-KinFrame is a private family photo PPT playback system. v0.4 adds auto-play with configurable intervals and a map album page showing geocoded photos on a China map. v0.3 upgraded the visual quality to a photography-portfolio-grade immersive experience with 8 slide templates, Fill/Shadow structured models, Texture/Vignette atmosphere layers, design presets, Scoped CSS, and comprehensive test coverage including Playwright E2E. AI is optional — the system always falls back to deterministic fallback designs.
+KinFrame is a private family photo PPT playback system. v0.4 adds auto-play with configurable intervals and a map album page showing geocoded photos on a China map. v0.3 upgraded the visual quality to a photography-portfolio-grade immersive experience with 8 slide templates, Fill/Shadow structured models, Texture/Vignette atmosphere layers, design presets, Scoped CSS, and comprehensive test coverage including Playwright E2E. All photo rendering now relies on deterministic fallback designs plus optional manual admin edits.
 
 ## v0.4 What's New
 
@@ -16,7 +16,7 @@ KinFrame is a private family photo PPT playback system. v0.4 adds auto-play with
 
 **Viewing Experience**: Image preloading for <300ms perceived switch latency. Slide transition animations (fade, slide, zoom). Empty category states with upload prompts. Mobile responsive design with touch swipe gestures (50px threshold), 44px minimum touch targets, and 16:9 aspect ratio scaling with letterboxing.
 
-**User Features**: Photo owners can edit their own photo messages inline. Admins have granular regeneration (caption, template, CSS tokens, full, fallback) on the photo detail page. All admin modifications are audit-logged with before/after values.
+**User Features**: Photo owners can edit their own photo messages inline. Admins can reset any photo back to a deterministic fallback design and manually manage design versions. All admin modifications are audit-logged with before/after values.
 
 **Engineering Quality**: Frontend and backend share a single JSON Schema source of truth for slide design validation. Playwright E2E tests cover 10+ core user scenarios. v0.3 acceptance script provides 10-step end-to-end verification.
 
@@ -26,21 +26,16 @@ KinFrame is a private family photo PPT playback system. v0.4 adds auto-play with
 
 **Reverse Geocoding**: Photos with GPS coordinates are asynchronously geocoded to location text (city, region, country, district, road). Defaults to OpenStreetMap Nominatim; Amap (高德) also supported. Disabled by default for offline development.
 
-**AI Integration** (optional, off by default): 
-- **Ollama** for local vision analysis (caption + category suggestions).
-- **DeepSeek** for AI-generated slide designs.
-- When AI is disabled or unavailable, the system falls back to deterministic designs.
-
 **Slide Renderer v0.2**: New Background, Mask, and Shape layers. CSS token hardening blocks layout-breaking properties. Validator enforces text length (≤200 chars), fontSize (≤120px), and rect bounds.
 
 **Admin Console** (`/admin/*`):
-- **Photo Diagnostics**: View EXIF, AI analysis JSON, geocoding status. Manually override caption and 6 location fields. Reset caption to auto-compute. Regenerate slide design on demand.
+- **Photo Diagnostics**: View EXIF and geocoding status. Manually override caption and 6 location fields. Reset caption to auto-compute. Regenerate deterministic fallback slide design on demand.
 - **Category Management**: Create categories, edit display fields, toggle active/inactive, reorder sort. Slug is immutable after creation.
 - **Audit Logs**: All admin modifications recorded with before/after values, filterable by admin, action, target type, and date range.
-- **Job Management**: View all processing jobs with retry capability, including new `reverse_geocode` and `vision_analyze` job types.
+- **Job Management**: View all processing jobs with retry capability, including `photo_ingest`, `reverse_geocode`, `fallback_regenerate`, and `photo_purge`.
 
 **Data Model**:
-- `final_caption` materialized column with `caption_source` tracking (admin/user/ai/none). Admin overrides take priority; reset-caption restores auto-computation.
+- `final_caption` materialized column with `caption_source` tracking (admin/user/none). Admin overrides take priority; reset-caption restores auto-computation.
 - `audit_logs` table records all admin actions with before/after/changed_fields JSON.
 - Category schema extended with `is_active`, `sort_order`, `legacy_slug`.
 
@@ -66,7 +61,7 @@ Install Docker and `just`, then run these in separate terminals:
 just infra              # PostgreSQL, Redis, MinIO, Caddy
 just backend            # FastAPI with hot reload + auto migrations
 just frontend           # Nuxt 3 dev server
-just worker             # Photo processor polling loop (optional — backend starts an embedded worker by default)
+just worker             # Photo processor polling loop
 ```
 
 Default local URLs:
@@ -181,14 +176,12 @@ WORKER_ARGS=--once just worker
 Each uploaded photo goes through:
 
 ```
-uploaded → processing → exif_parsed → preview_generated → vision_analyzed → geocoded → design_generated → ready
+uploaded → processing → preview_generated → geocoded → ready
 ```
 
-- **exif_parsed**: ExifTool extracted camera make/model, GPS, taken_at.
 - **preview_generated**: 2048px WebP preview + 512px WebP thumbnail uploaded to MinIO.
-- **vision_analyzed**: AI vision model (Ollama) generates caption and category suggestions (skipped if AI is disabled).
 - **geocoded**: GPS coordinates reverse-geocoded to location text via Nominatim or Amap (skipped if geocoding is disabled or no GPS).
-- **design_generated**: Slide design created (AI-generated via DeepSeek, or deterministic fallback).
+- **design_generated**: Deterministic fallback slide design created during ingest. Admins can later save manual design drafts or promote manual versions.
 - **ready**: Photo appears in `/showcase` playback.
 
 Failed jobs can be retried from `/admin/jobs`.
@@ -235,35 +228,6 @@ GEOCODING_RATE_LIMIT_PER_SECOND=1.0
 
 When `GEOCODING_ENABLED=false`, photos without GPS are processed normally; photos with GPS skip geocoding but still appear in showcase.
 
-### AI Configuration
-
-AI is **disabled by default**. The system works fully without any AI service.
-
-**Ollama (local vision analysis)**:
-
-```bash
-AI_ENABLED=true
-OLLAMA_ENDPOINT=http://host.docker.internal:11434
-OLLAMA_VISION_MODEL=llava:13b
-```
-
-**DeepSeek (AI slide design generation)**:
-
-```bash
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_API_KEY=sk-your-key
-DEEPSEEK_MODEL=deepseek-chat
-AI_REQUEST_TIMEOUT_SECONDS=500
-AI_MAX_RETRIES=1
-```
-
-**Important**: Never commit real API keys. `.env.example` only contains placeholder values. If a key has been committed to Git history, rotate it immediately.
-
-When AI is disabled or unavailable:
-- Caption falls back to `user_message` (upload form) or empty.
-- Category falls back to user selection on upload.
-- Slide design falls back to deterministic templates based on photo orientation and category.
-
 ## Backup And Restore
 
 ```bash
@@ -281,8 +245,6 @@ The backup includes PostgreSQL (users, photos, slide_designs, categories, audit_
 **Backend can't connect to PostgreSQL**: Ensure `just infra` is running. Check `docker ps | grep kinframe-postgres`. Default port is `15432`.
 
 **Geocoding returns no results or timeouts**: Nominatim has a 1 req/s rate limit. Geocoding is async and will retry up to `GEOCODING_MAX_RETRIES` times. Failed geocoding does not block photo processing.
-
-**AI requests timeout**: DeepSeek/Ollama may take 30-120+ seconds. Increase `AI_REQUEST_TIMEOUT_SECONDS` (default 500s). AI failures fall back to deterministic designs — the photo will still appear in showcase.
 
 **Right-click doesn't show browser context menu**: This is intentional — the showcase page prevents default context menu to avoid accidental interruptions during playback. Use browser menu bar or keyboard shortcuts for browser actions.
 

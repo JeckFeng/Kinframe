@@ -38,12 +38,7 @@ class Photo(Base):
         String(20), nullable=False, default="none", index=True,
     )
     user_message: Mapped[str | None] = mapped_column(Text())
-    ai_caption: Mapped[str | None] = mapped_column(Text())
     final_caption: Mapped[str | None] = mapped_column(Text())
-    ai_category_suggestion: Mapped[str | None] = mapped_column(String(50))
-    ai_analysis_json: Mapped[dict | None] = mapped_column(JSON)
-    ai_caption_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    ai_category_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     include_in_showcase: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     time_source: Mapped[str] = mapped_column(String(30), nullable=False, default="uploaded_at")
     bucket: Mapped[str] = mapped_column(String(100), nullable=False)

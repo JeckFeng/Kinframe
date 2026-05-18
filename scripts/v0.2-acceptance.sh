@@ -209,7 +209,6 @@ printf '%s' "$member_detail" | python3 -c '
 import json,sys
 d = json.load(sys.stdin)
 assert d["id"], "Missing id"
-assert "ai_analysis_json" not in d, "Regular user should NOT see ai_analysis_json"
 assert "exif_json" not in d, "Regular user should NOT see exif_json"
 assert "geocoding_error" not in d, "Regular user should NOT see geocoding_error"
 print("  User photo detail OK: sensitive fields absent")

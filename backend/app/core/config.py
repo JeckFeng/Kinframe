@@ -56,16 +56,6 @@ class Settings(BaseSettings):
     geocoding_max_retries: int = Field(default=2, ge=0)
     geocoding_rate_limit_per_second: float = Field(default=1.0, ge=0.1)
 
-    # AI
-    ai_enabled: bool = False
-    ollama_endpoint: str | None = None
-    ollama_vision_model: str | None = None
-    deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_api_key: str | None = None
-    deepseek_model: str | None = None
-    ai_request_timeout_seconds: int = Field(default=500, ge=10)
-    ai_max_retries: int = Field(default=1, ge=0)
-
     model_config = SettingsConfigDict(
         env_file=(REPO_ROOT / ".env", BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",

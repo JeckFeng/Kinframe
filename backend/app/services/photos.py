@@ -15,7 +15,6 @@ PHOTO_STATUS_UPLOADED = "uploaded"
 PHOTO_STATUS_PROCESSING = "processing"
 PHOTO_STATUS_EXIF_PARSED = "exif_parsed"
 PHOTO_STATUS_PREVIEW_GENERATED = "preview_generated"
-PHOTO_STATUS_VISION_ANALYZED = "vision_analyzed"
 PHOTO_STATUS_DESIGN_GENERATED = "design_generated"
 PHOTO_STATUS_READY = "ready"
 PHOTO_STATUS_FAILED = "failed"
@@ -25,7 +24,6 @@ PHOTO_STATUSES = {
     PHOTO_STATUS_PROCESSING,
     PHOTO_STATUS_EXIF_PARSED,
     PHOTO_STATUS_PREVIEW_GENERATED,
-    PHOTO_STATUS_VISION_ANALYZED,
     PHOTO_STATUS_DESIGN_GENERATED,
     PHOTO_STATUS_READY,
     PHOTO_STATUS_FAILED,
@@ -127,7 +125,7 @@ def update_user_message(db: Session, photo: Photo, requesting_user: User, new_me
 def compute_final_caption(photo: Photo) -> tuple[str | None, str]:
     """Compute final_caption and caption_source from photo fields.
 
-    Priority: manual admin override > user_message > ai_caption > None.
+    Priority: manual admin override > user_message > None.
     Returns (final_caption, caption_source).
     """
     # Admin manual override takes absolute priority
@@ -136,8 +134,6 @@ def compute_final_caption(photo: Photo) -> tuple[str | None, str]:
 
     if photo.user_message:
         return photo.user_message, "user"
-    if photo.ai_caption and photo.ai_caption_enabled:
-        return photo.ai_caption, "ai"
     return None, "none"
 
 
@@ -154,14 +150,6 @@ def update_photo(db: Session, photo: Photo, payload: PhotoUpdate) -> Photo:
             final, source = compute_final_caption(photo)
             photo.final_caption = final
             photo.caption_source = source
-    if "ai_caption_enabled" in data and data["ai_caption_enabled"] is not None:
-        photo.ai_caption_enabled = data["ai_caption_enabled"]
-        if photo.caption_source != "admin":
-            final, source = compute_final_caption(photo)
-            photo.final_caption = final
-            photo.caption_source = source
-    if "ai_category_enabled" in data and data["ai_category_enabled"] is not None:
-        photo.ai_category_enabled = data["ai_category_enabled"]
     if "include_in_showcase" in data and data["include_in_showcase"] is not None:
         photo.include_in_showcase = data["include_in_showcase"]
     photo.updated_at = utc_now()
@@ -240,7 +228,7 @@ def update_photo_admin(
 
 
 def reset_photo_caption(db: Session, photo: Photo) -> dict:
-    """Clear admin caption override and recompute from user_message / ai_caption."""
+    """Clear admin caption override and recompute from user_message."""
 
     old_caption = photo.final_caption
     old_source = photo.caption_source

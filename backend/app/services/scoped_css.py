@@ -243,7 +243,7 @@ def sanitize_scoped_css(raw_css: str) -> SanitizeResult:
         )
 
     # Parse CSS into rule blocks: selector { declarations }
-    # Simple regex-based parser for the scoped CSS format AI generates
+    # Simple regex-based parser for KinFrame scoped CSS
     rule_pattern = re.compile(
         r'([^{}]+?)\s*\{\s*([^{}]*?)\s*\}',
         re.DOTALL,

@@ -1,5 +1,5 @@
 import templatesConfig from '../configs/slide_templates.json'
-import whitelistConfig from '../configs/ai_css_whitelist.json'
+import whitelistConfig from '../configs/scoped_css_whitelist.json'
 import presetsConfig from '../configs/design_presets.json'
 import { sanitizeScopedCss } from '../utils/cssSanitizer'
 import type {
@@ -470,15 +470,6 @@ export function validateSlideDesign(value: unknown): SlideDesign {
   // Sanitize style tokens
   const { tokens: styleTokens, scopedCss } = sanitizeStyleTokens(doc.styleTokens)
 
-  const aiMeta = doc.aiMeta
-  const validatedAiMeta = aiMeta && typeof aiMeta === 'object'
-    ? {
-        provider: typeof (aiMeta as Record<string, unknown>).provider === 'string' ? (aiMeta as Record<string, unknown>).provider as string : undefined,
-        model: typeof (aiMeta as Record<string, unknown>).model === 'string' ? (aiMeta as Record<string, unknown>).model as string : undefined,
-        promptVersion: typeof (aiMeta as Record<string, unknown>).promptVersion === 'string' ? (aiMeta as Record<string, unknown>).promptVersion as string : undefined,
-      }
-    : undefined
-
   return {
     photoId: doc.photoId as string,
     templateId: templateId as string,
@@ -491,6 +482,5 @@ export function validateSlideDesign(value: unknown): SlideDesign {
       allowHtml: false,
       allowJavaScript: false,
     },
-    aiMeta: validatedAiMeta,
   }
 }

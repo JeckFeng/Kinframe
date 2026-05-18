@@ -10,7 +10,7 @@ from app.schemas.slide_design_assets import (
     get_template_ids,
     load_design_presets,
 )
-from app.services.ai.css_sanitizer import sanitize_scoped_css
+from app.services.scoped_css import sanitize_scoped_css
 
 ALLOWED_TEMPLATE_IDS = set(get_template_ids())
 ALLOWED_LAYER_TYPES = set(get_layer_types())

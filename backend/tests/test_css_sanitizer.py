@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.services.ai.css_sanitizer import (
+from app.services.scoped_css import (
     CSS_SANITIZER_ALLOWED_SELECTORS,
     CSS_SANITIZER_ALLOWED_PROPERTIES,
     sanitize_scoped_css,

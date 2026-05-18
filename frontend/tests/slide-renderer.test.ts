@@ -73,7 +73,7 @@ describe('validateSlideDesign — unknown layer filtering', () => {
           source: 'preview',
         },
         {
-          type: 'unknown_ai_layer',
+          type: 'unknown_layer',
           zIndex: 2,
           rect: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
           content: 'should be filtered',
@@ -716,47 +716,6 @@ describe('validateSlideDesign — renderPolicy and bounds', () => {
       ],
     })
     expect(() => validateSlideDesign(design)).toThrow(SlideDesignValidationError)
-  })
-})
-
-// ── aiMeta pass-through (Phase 4) ────────────────────────────────
-
-describe('validateSlideDesign — aiMeta pass-through', () => {
-  it('passes through aiMeta with provider, model, promptVersion', () => {
-    const design = makeDesign({
-      aiMeta: {
-        provider: 'ollama',
-        model: 'qwen3-vl:8b',
-        promptVersion: 'v0.2-s1',
-      },
-    })
-    const result = validateSlideDesign(design)
-    expect(result.aiMeta).toBeDefined()
-    expect(result.aiMeta?.provider).toBe('ollama')
-    expect(result.aiMeta?.model).toBe('qwen3-vl:8b')
-    expect(result.aiMeta?.promptVersion).toBe('v0.2-s1')
-  })
-
-  it('returns undefined aiMeta when not provided', () => {
-    const design = makeDesign({})
-    const result = validateSlideDesign(design)
-    expect(result.aiMeta).toBeUndefined()
-  })
-
-  it('filters non-string aiMeta fields', () => {
-    const design = makeDesign({
-      aiMeta: {
-        provider: 'ollama',
-        model: 123,
-        promptVersion: true,
-        extraField: 'should be dropped',
-      },
-    })
-    const result = validateSlideDesign(design)
-    expect(result.aiMeta).toBeDefined()
-    expect(result.aiMeta?.provider).toBe('ollama')
-    expect(result.aiMeta?.model).toBeUndefined()
-    expect(result.aiMeta?.promptVersion).toBeUndefined()
   })
 })
 

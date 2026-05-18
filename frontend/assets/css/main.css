@@ -1,4 +1,5 @@
 @import './transitions.css';
+@import './showcase.css';
 
 @tailwind base;
 @tailwind components;

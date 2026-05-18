@@ -57,10 +57,6 @@ class TestSchemaCompleteness:
         assert "styleTokens" in required
         assert "renderPolicy" in required
 
-    def test_ai_meta_field(self, schema):
-        """Schema must include aiMeta field."""
-        assert "aiMeta" in schema["properties"]
-
     def test_render_policy_forbids_html_js(self, schema):
         """renderPolicy must forbid HTML and JavaScript."""
         rp = schema["properties"]["renderPolicy"]["properties"]
@@ -143,7 +139,7 @@ class TestPythonValidatorLayerTypes:
         assert "vignette" in ALLOWED_LAYER_TYPES
 
     def test_validator_normalizes_common_image_source_aliases(self):
-        """Python semantic validator should coerce common AI image-source aliases into valid values."""
+        """Python semantic validator should coerce common image-source aliases into valid values."""
         from app.schemas.slide_design_validator import validate_slide_design_data
 
         design = {
@@ -161,7 +157,7 @@ class TestPythonValidatorLayerTypes:
         assert validated["layers"][0]["source"] == "preview"
 
     def test_validator_expands_props_based_layers(self):
-        """Python semantic validator should flatten AI-generated props payloads into the local layer contract."""
+        """Python semantic validator should flatten props payloads into the local layer contract."""
         from app.schemas.slide_design_validator import validate_slide_design_data
 
         design = {

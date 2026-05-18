@@ -33,11 +33,7 @@ class PhotoPublicRead(BaseModel):
     category_source: str
     caption_source: str = "none"
     user_message: str | None
-    ai_caption: str | None
     final_caption: str | None
-    ai_category_suggestion: str | None
-    ai_caption_enabled: bool
-    ai_category_enabled: bool
     include_in_showcase: bool
     time_source: str
     bucket: str
@@ -73,7 +69,7 @@ class PhotoPublicRead(BaseModel):
 
 
 class PhotoAdminRead(BaseModel):
-    """Full photo metadata for admin diagnostics (includes AI raw output, EXIF, errors)."""
+    """Full photo metadata for admin diagnostics."""
 
     id: str
     owner_id: str
@@ -81,12 +77,7 @@ class PhotoAdminRead(BaseModel):
     category_source: str
     caption_source: str = "none"
     user_message: str | None
-    ai_caption: str | None
     final_caption: str | None
-    ai_category_suggestion: str | None
-    ai_analysis_json: dict | None = None
-    ai_caption_enabled: bool
-    ai_category_enabled: bool
     include_in_showcase: bool
     time_source: str
     bucket: str
@@ -117,12 +108,11 @@ class PhotoAdminRead(BaseModel):
     geocoded_at: datetime | None = None
     status: str
     processing_message: str | None = None
-    active_design_source: Literal["fallback", "ai", "manual"] | None = None
+    active_design_source: Literal["fallback", "manual"] | None = None
     active_design_version: int | None = None
     latest_job_type: str | None = None
     latest_job_status: str | None = None
     latest_job_error: str | None = None
-    ai_status: Literal["missing", "analyzed", "failed"] = "missing"
     has_failed_jobs: bool = False
     needs_review: bool = False
     design_versions: list["SlideDesignSummaryRead"] = Field(default_factory=list)
@@ -149,8 +139,6 @@ class PhotoUpdate(BaseModel):
 
     category: PhotoCategory | None = None
     user_message: str | None = Field(default=None, max_length=2000)
-    ai_caption_enabled: bool | None = None
-    ai_category_enabled: bool | None = None
     include_in_showcase: bool | None = None
 
 
@@ -167,13 +155,10 @@ class AdminPhotoUpdate(BaseModel):
     location_road: str | None = None
 
 
-from typing import Literal
-
-
 class RegenerateScope(BaseModel):
-    """Scope for admin granular photo regeneration."""
+    """Scope for admin deterministic regeneration."""
 
-    scope: Literal["caption", "template", "css_tokens", "full", "fallback"]
+    scope: Literal["fallback"]
 
 
 class PresignedUrlResponse(BaseModel):
@@ -194,8 +179,6 @@ class PhotoProcessingStatusResponse(BaseModel):
     error_message: str | None
     slide_design_status: str | None
     slide_design_source: str | None
-    ai_provider: str | None = None
-    ai_model: str | None = None
     geocoding_status: str | None = None
 
 
@@ -221,7 +204,7 @@ class SlideDesignCreate(BaseModel):
 
     version: int = Field(ge=1)
     design_json: dict[str, Any]
-    source: Literal["fallback", "ai", "manual"]
+    source: Literal["fallback", "manual"]
     status: Literal["draft", "active", "failed"]
     validation_errors: list[str] | None = None
 
@@ -271,7 +254,7 @@ class SlideDesignRead(BaseModel):
     photo_id: str
     version: int
     design_json: dict[str, Any]
-    source: Literal["fallback", "ai", "manual"]
+    source: Literal["fallback", "manual"]
     status: Literal["draft", "active", "failed"]
     validation_errors: list[str] | None
     created_at: datetime
@@ -279,22 +262,14 @@ class SlideDesignRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
-class QualityReportRead(BaseModel):
-    total_score: int
-    passed: bool
-    failures: list[str] = Field(default_factory=list)
-
-
 class SlideDesignSummaryRead(BaseModel):
     id: str
     version: int
-    source: Literal["fallback", "ai", "manual"]
+    source: Literal["fallback", "manual"]
     status: Literal["draft", "active", "failed"]
     design_json: dict[str, Any] | None = None
     template_id: str | None = None
     layer_count: int = 0
-    quality_report: QualityReportRead | None = None
     validation_errors: list[str] | None = None
     created_at: datetime
     updated_at: datetime
@@ -307,10 +282,6 @@ class AdminPhotoJobRead(BaseModel):
     attempts: int
     max_attempts: int
     error_message: str | None = None
-    ai_provider: str | None = None
-    ai_model: str | None = None
-    ai_prompt_version: str | None = None
-    ai_raw_summary: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     created_at: datetime
@@ -339,8 +310,7 @@ class AdminPhotoListItem(BaseModel):
     location_name: str | None = None
     location_city: str | None = None
     geocoding_status: str = "not_applicable"
-    ai_status: Literal["missing", "analyzed", "failed"] = "missing"
-    active_design_source: Literal["fallback", "ai", "manual"] | None = None
+    active_design_source: Literal["fallback", "manual"] | None = None
     active_design_version: int | None = None
     latest_job_type: str | None = None
     latest_job_status: str | None = None

@@ -29,7 +29,7 @@ done
 echo "Checking v0.1 planning documents..."
 grep -q "阶段 0：当前系统重构与 PRD 基线切换" docs/code_plan_min_v0.1.md
 grep -q "/showcase" docs/code_plan_min_v0.1.md
-grep -q "AI 驱动的家庭影像 PPT 放映" docs/code_plan_min_v0.1.md
+grep -q "家庭影像" docs/code_plan_min_v0.1.md
 
 echo "Running v0 acceptance as v0.1 baseline..."
 scripts/v0-acceptance.sh

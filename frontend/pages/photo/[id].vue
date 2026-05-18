@@ -37,8 +37,6 @@ const adminResettingCaption = ref(false)
 const manualDesignJson = ref('')
 const manualDesignSaving = ref(false)
 const activatingDesignId = ref<string | null>(null)
-type RegenerateScope = 'caption' | 'template' | 'css_tokens' | 'full' | 'fallback'
-const regenScope = ref<RegenerateScope>('full')
 
 const editingMessage = ref(false)
 const messageSaving = ref(false)
@@ -54,7 +52,6 @@ const STATUS_LABELS: Record<string, string> = {
   processing: '正在解析照片信息…',
   exif_parsed: '已解析拍摄信息',
   preview_generated: '正在生成预览…',
-  vision_analyzed: 'AI 分析已完成',
   design_generated: '正在生成幻灯片设计…',
   ready: '已完成 ✓',
   failed: '处理失败',
@@ -62,22 +59,12 @@ const STATUS_LABELS: Record<string, string> = {
 const ADMIN_JOB_TYPE_LABELS: Record<string, string> = {
   photo_ingest: 'Photo Ingest',
   reverse_geocode: 'Reverse Geocode',
-  vision_analyze: 'Vision Analyze',
-  slide_design_generate: 'Slide Design',
-  caption_regenerate: 'Caption Regenerate',
-  template_regenerate: 'Template Regenerate',
-  css_regenerate: 'CSS Regenerate',
   fallback_regenerate: 'Fallback Regenerate',
+  photo_purge: 'Permanent Delete',
 }
 const DESIGN_SOURCE_LABELS: Record<string, string> = {
   fallback: 'Fallback',
-  ai: 'AI',
   manual: 'Manual',
-}
-const AI_STATUS_LABELS: Record<string, string> = {
-  analyzed: 'Analyzed',
-  failed: 'Failed',
-  missing: 'Missing',
 }
 
 function formatStatus(status: string): string {
@@ -332,7 +319,7 @@ async function resetCaption() {
     )
     await loadAdminPhoto(photo.value.id)
     await loadPhoto(false)
-    successMessage.value = 'Caption reset to auto'
+    successMessage.value = 'Caption reset'
   } catch (error) {
     errorMessage.value = getApiErrorMessage(error)
   } finally {
@@ -340,25 +327,18 @@ async function resetCaption() {
   }
 }
 
-async function regenerateDesign() {
+async function resetToFallbackDesign() {
   if (!photo.value) return
-  const labels: Record<RegenerateScope, string> = {
-    caption: 'Regenerate Caption Only',
-    template: 'Regenerate Template Only',
-    css_tokens: 'Regenerate CSS Tokens Only',
-    full: 'Regenerate Full Design',
-    fallback: 'Reset to Deterministic Fallback',
-  }
-  if (process.client && !window.confirm(`Confirm: ${labels[regenScope.value]}?`)) {
+  if (process.client && !window.confirm('Confirm: reset this photo to the deterministic fallback design?')) {
     return
   }
   adminRegenerating.value = true
   try {
     await apiFetch(`/admin/photos/${photo.value.id}/regenerate`, {
       method: 'POST',
-      body: { scope: regenScope.value },
+      body: { scope: 'fallback' },
     })
-    successMessage.value = 'Regeneration queued'
+    successMessage.value = 'Fallback regeneration queued'
     await refreshProcessingStatus()
     startProcessingPoll()
   } catch (error) {
@@ -609,7 +589,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-stone-600 hover:bg-stone-200 disabled:opacity-50"
-              :disabled="adminResettingCaption || adminPhoto.caption_source === 'user' || adminPhoto.caption_source === 'ai'"
+              :disabled="adminResettingCaption || adminPhoto.caption_source !== 'admin'"
               @click="resetCaption"
             >
               <RotateCcw class="h-3 w-3" />
@@ -655,20 +635,6 @@ onBeforeUnmount(() => {
             <p v-if="adminPhoto.geocoding_error" class="mt-1 text-red-600">{{ adminPhoto.geocoding_error }}</p>
           </div>
 
-          <!-- AI Info -->
-          <div v-if="adminPhoto.ai_analysis_json || adminPhoto.ai_caption || adminPhoto.ai_category_suggestion" class="mb-3 border-t border-amber-200 pt-2 text-xs">
-            <p v-if="adminPhoto.ai_category_suggestion" class="text-stone-700">
-              <span class="text-stone-500">AI Category:</span> {{ adminPhoto.ai_category_suggestion }}
-            </p>
-            <p v-if="adminPhoto.ai_caption" class="text-stone-700">
-              <span class="text-stone-500">AI Caption:</span> {{ adminPhoto.ai_caption }}
-            </p>
-            <details v-if="adminPhoto.ai_analysis_json" class="mt-1">
-              <summary class="cursor-pointer text-stone-500 hover:text-stone-700">AI Analysis JSON</summary>
-              <pre class="mt-1 max-h-32 overflow-auto rounded bg-stone-100 p-2 text-xs">{{ JSON.stringify(adminPhoto.ai_analysis_json, null, 2) }}</pre>
-            </details>
-          </div>
-
           <!-- EXIF -->
           <details v-if="adminPhoto.exif_json" class="mb-3 border-t border-amber-200 pt-2 text-xs">
             <summary class="cursor-pointer text-stone-500 hover:text-stone-700">EXIF Data</summary>
@@ -702,10 +668,6 @@ onBeforeUnmount(() => {
 
           <div class="mb-3 grid grid-cols-3 gap-2 text-xs">
             <div class="rounded-md border border-amber-200 bg-white px-2 py-2">
-              <p class="text-stone-500">AI Status</p>
-              <p class="font-medium text-stone-800">{{ AI_STATUS_LABELS[adminPhoto.ai_status] || adminPhoto.ai_status }}</p>
-            </div>
-            <div class="rounded-md border border-amber-200 bg-white px-2 py-2">
               <p class="text-stone-500">Active Design</p>
               <p class="font-medium text-stone-800">
                 {{ adminPhoto.active_design_source ? `${DESIGN_SOURCE_LABELS[adminPhoto.active_design_source] || adminPhoto.active_design_source} v${adminPhoto.active_design_version}` : 'None' }}
@@ -714,8 +676,12 @@ onBeforeUnmount(() => {
             <div class="rounded-md border border-amber-200 bg-white px-2 py-2">
               <p class="text-stone-500">Attention</p>
               <p class="font-medium" :class="adminPhoto.needs_review ? 'text-amber-700' : 'text-emerald-700'">
-                {{ adminPhoto.needs_review ? 'Needs review' : 'Healthy' }}
+              {{ adminPhoto.needs_review ? 'Needs review' : 'Healthy' }}
               </p>
+            </div>
+            <div class="rounded-md border border-amber-200 bg-white px-2 py-2">
+              <p class="text-stone-500">Latest Job</p>
+              <p class="font-medium text-stone-800">{{ adminPhoto.latest_job_type || 'None' }}</p>
             </div>
           </div>
 
@@ -730,25 +696,14 @@ onBeforeUnmount(() => {
               <Save class="h-3.5 w-3.5" />
               {{ adminSaving ? 'Saving…' : 'Save Admin Changes' }}
             </button>
-            <select
-              v-model="regenScope"
-              class="focus-ring rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-700"
-              :disabled="adminRegenerating || hasActiveJob(processingStatus)"
-            >
-              <option value="caption">Caption only</option>
-              <option value="template">Template only</option>
-              <option value="css_tokens">CSS tokens only</option>
-              <option value="full">Full design</option>
-              <option value="fallback">Deterministic fallback</option>
-            </select>
             <button
               type="button"
               class="focus-ring inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 disabled:opacity-50"
               :disabled="adminRegenerating || hasActiveJob(processingStatus)"
-              @click="regenerateDesign"
+              @click="resetToFallbackDesign"
             >
               <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': adminRegenerating }" />
-              {{ adminRegenerating ? 'Queuing…' : 'Run Regeneration' }}
+              {{ adminRegenerating ? 'Queuing…' : 'Reset to Fallback Design' }}
             </button>
           </div>
           <p v-if="hasActiveJob(processingStatus)" class="mt-3 text-xs text-stone-600">
@@ -771,10 +726,6 @@ onBeforeUnmount(() => {
                 </div>
                 <p class="mt-1 text-stone-600">
                   {{ design.template_id || 'unknown template' }} · {{ design.layer_count }} layers
-                </p>
-                <p v-if="design.quality_report" class="mt-1" :class="design.quality_report.passed ? 'text-emerald-700' : 'text-red-700'">
-                  Quality {{ design.quality_report.total_score }}/5
-                  <span v-if="design.quality_report.failures.length"> · {{ design.quality_report.failures.join('; ') }}</span>
                 </p>
                 <p v-if="design.validation_errors?.length" class="mt-1 text-red-700">
                   {{ design.validation_errors.join('; ') }}
@@ -853,9 +804,6 @@ onBeforeUnmount(() => {
                   <p class="font-medium text-stone-800">{{ formatAdminJobType(job.job_type) }}</p>
                   <span class="text-stone-500">{{ job.status }}</span>
                 </div>
-                <p class="mt-1 text-stone-600">
-                  {{ job.ai_provider || 'system' }}{{ job.ai_model ? ` · ${job.ai_model}` : '' }}{{ job.ai_prompt_version ? ` · ${job.ai_prompt_version}` : '' }}
-                </p>
                 <p v-if="job.error_message" class="mt-1 text-red-700">{{ job.error_message }}</p>
               </div>
             </div>

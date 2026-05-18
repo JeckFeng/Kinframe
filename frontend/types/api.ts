@@ -6,7 +6,6 @@ export type PhotoStatus =
   | 'processing'
   | 'exif_parsed'
   | 'preview_generated'
-  | 'vision_analyzed'
   | 'design_generated'
   | 'ready'
   | 'failed'
@@ -39,11 +38,7 @@ export interface Photo {
   category_source: string
   caption_source: string
   user_message: string | null
-  ai_caption: string | null
   final_caption: string | null
-  ai_category_suggestion: string | null
-  ai_caption_enabled: boolean
-  ai_category_enabled: boolean
   include_in_showcase: boolean
   time_source: string
   bucket: string
@@ -90,8 +85,6 @@ export interface PhotoProcessingStatusResponse {
   error_message: string | null
   slide_design_status: string | null
   slide_design_source: string | null
-  ai_provider: string | null
-  ai_model: string | null
   geocoding_status: string | null
 }
 
@@ -123,6 +116,7 @@ export interface ApiErrorBody {
 export interface ShowcasePhotoItem {
   photo: Photo
   preview_url: string | null
+  thumbnail_url?: string | null
   slide_design: Record<string, unknown> | null
 }
 
@@ -139,10 +133,6 @@ export interface AdminJobItem {
   attempts: number
   max_attempts: number
   error_message: string | null
-  ai_provider: string | null
-  ai_model: string | null
-  ai_prompt_version: string | null
-  ai_raw_summary: string | null
   started_at: string | null
   finished_at: string | null
   created_at: string
@@ -162,12 +152,7 @@ export interface AdminPhoto {
   category_source: string
   caption_source: string
   user_message: string | null
-  ai_caption: string | null
   final_caption: string | null
-  ai_category_suggestion: string | null
-  ai_analysis_json: Record<string, unknown> | null
-  ai_caption_enabled: boolean
-  ai_category_enabled: boolean
   include_in_showcase: boolean
   time_source: string
   gps_lat: number | null
@@ -186,12 +171,11 @@ export interface AdminPhoto {
   geocoding_error: string | null
   geocoded_at: string | null
   status: string
-  active_design_source: 'fallback' | 'ai' | 'manual' | null
+  active_design_source: 'fallback' | 'manual' | null
   active_design_version: number | null
   latest_job_type: string | null
   latest_job_status: string | null
   latest_job_error: string | null
-  ai_status: 'missing' | 'analyzed' | 'failed'
   has_failed_jobs: boolean
   needs_review: boolean
   design_versions: AdminPhotoDesignVersion[]
@@ -201,21 +185,14 @@ export interface AdminPhoto {
   updated_at: string
 }
 
-export interface QualityReport {
-  total_score: number
-  passed: boolean
-  failures: string[]
-}
-
 export interface AdminPhotoDesignVersion {
   id: string
   version: number
-  source: 'fallback' | 'ai' | 'manual'
+  source: 'fallback' | 'manual'
   status: 'draft' | 'active' | 'failed'
   design_json: Record<string, unknown> | null
   template_id: string | null
   layer_count: number
-  quality_report: QualityReport | null
   validation_errors: string[] | null
   created_at: string
   updated_at: string
@@ -228,10 +205,6 @@ export interface AdminPhotoJobSummary {
   attempts: number
   max_attempts: number
   error_message: string | null
-  ai_provider: string | null
-  ai_model: string | null
-  ai_prompt_version: string | null
-  ai_raw_summary: string | null
   started_at: string | null
   finished_at: string | null
   created_at: string
@@ -260,8 +233,7 @@ export interface AdminPhotoListItem {
   location_name: string | null
   location_city: string | null
   geocoding_status: string
-  ai_status: 'missing' | 'analyzed' | 'failed'
-  active_design_source: 'fallback' | 'ai' | 'manual' | null
+  active_design_source: 'fallback' | 'manual' | null
   active_design_version: number | null
   latest_job_type: string | null
   latest_job_status: string | null

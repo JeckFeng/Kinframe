@@ -1,6 +1,6 @@
 {
   "version": "v0.3",
-  "description": "Curated design presets for AI slide design generation. Each preset can be referenced by ID from a slide design layer via presetRef field.",
+  "description": "Curated design presets for KinFrame slide designs. Each preset can be referenced by ID from a slide design layer via presetRef field.",
   "palettes": {
     "warm_amber_glow": { "name": "Warm Amber Glow", "mood": "warm, nostalgic", "colors": { "background": "#2c1810", "text": "#f5e6d3", "accent": "#d4a574", "overlay": "#4a2c17" }},
     "misty_mountain_blue": { "name": "Misty Mountain Blue", "mood": "calm, serene", "colors": { "background": "#0d1b2a", "text": "#e0e1dd", "accent": "#778da9", "overlay": "#1b2838" }},

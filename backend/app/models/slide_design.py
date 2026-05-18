@@ -22,7 +22,7 @@ class SlideDesign(Base):
     __table_args__ = (
         CheckConstraint("version >= 1", name="ck_slide_designs_version_positive"),
         CheckConstraint("status in ('draft', 'active', 'failed')", name="ck_slide_designs_status"),
-        CheckConstraint("source in ('fallback', 'ai', 'manual')", name="ck_slide_designs_source"),
+        CheckConstraint("source in ('fallback', 'manual')", name="ck_slide_designs_source"),
         UniqueConstraint("photo_id", "version", name="uq_slide_designs_photo_version"),
     )
 

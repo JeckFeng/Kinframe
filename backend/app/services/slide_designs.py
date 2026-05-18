@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,27 @@ def get_latest_active_slide_design(db: Session, photo_id: str) -> SlideDesign | 
             SlideDesign.status == SLIDE_DESIGN_STATUS_ACTIVE,
         )
         .order_by(SlideDesign.version.desc(), SlideDesign.created_at.desc())
+    )
+
+
+def get_latest_display_slide_design(db: Session, photo_id: str) -> SlideDesign | None:
+    """Return the latest non-legacy-generated design to render for a photo.
+
+    Prefer an active fallback/manual design. If an old generated design is still marked
+    active, fall back to the newest fallback/manual version instead of serving it.
+    """
+
+    return db.scalar(
+        select(SlideDesign)
+        .where(
+            SlideDesign.photo_id == photo_id,
+            SlideDesign.source != "ai",
+        )
+        .order_by(
+            case((SlideDesign.status == SLIDE_DESIGN_STATUS_ACTIVE, 0), else_=1),
+            SlideDesign.version.desc(),
+            SlideDesign.created_at.desc(),
+        )
     )
 
 

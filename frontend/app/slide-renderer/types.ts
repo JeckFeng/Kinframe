@@ -149,13 +149,6 @@ export interface RenderPolicy {
   allowJavaScript: boolean
 }
 
-/** AI generation metadata — optional provenance info. */
-export interface SlideAiMeta {
-  provider?: string
-  model?: string
-  promptVersion?: string
-}
-
 /** Top-level slide design document. */
 export interface SlideDesign {
   photoId: string
@@ -165,7 +158,6 @@ export interface SlideDesign {
   styleTokens: Record<string, string>
   scopedCss?: string
   renderPolicy: RenderPolicy
-  aiMeta?: SlideAiMeta
 }
 
 /** Template definition from slide_templates.json. */

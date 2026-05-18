@@ -33,10 +33,6 @@ expected_message = sys.argv[2]
 assert payload["id"] == photo_id
 assert payload["category"] == "travel"
 assert payload["user_message"] == expected_message
-assert payload["ai_caption"] is None
-assert payload["ai_category_suggestion"] is None
-assert payload["ai_caption_enabled"] is False
-assert payload["ai_category_enabled"] is False
 assert payload["include_in_showcase"] is True
 assert payload["time_source"] == "uploaded_at"
 assert payload["width"] and payload["height"]

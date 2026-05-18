@@ -98,7 +98,6 @@ def _make_photo(db: Session, storage: FakeObjectStorage, owner: User, **kwargs) 
         user_message=kwargs.get("user_message"),
         final_caption=kwargs.get("final_caption", kwargs.get("user_message")),  # respect explicit final_caption
         caption_source=kwargs.get("caption_source", "user" if kwargs.get("user_message") else "none"),
-        ai_caption_enabled=False, ai_category_enabled=False,
         taken_at=kwargs.get("taken_at", datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)),
         uploaded_at=kwargs.get("uploaded_at", datetime(2025, 5, 10, 12, 0, 0, tzinfo=timezone.utc)),
         time_source=kwargs.get("time_source", "exif"),

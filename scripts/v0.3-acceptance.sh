@@ -314,8 +314,7 @@ if unknown_layers:
 else:
     print(f"  Layer types OK: {layer_types_seen}")
 
-# Verify aiMeta field exists in schema
-# (tested in test_schema_sharing.py, spot-check here)
+# Schema parity is covered in test_schema_sharing.py; spot-check template and layer inventories here.
 print("  v0.3 schema fields: template IDs and layer types validated")
 '
 

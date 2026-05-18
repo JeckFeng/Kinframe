@@ -23,12 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
 }
 const JOB_TYPE_LABELS: Record<string, string> = {
   photo_ingest: '照片入库',
-  slide_design_generate: '幻灯片生成',
   reverse_geocode: '反向地理编码',
-  vision_analyze: 'AI 视觉分析',
-  caption_regenerate: '文案重生成',
-  template_regenerate: '模板重生成',
-  css_regenerate: '样式重生成',
   fallback_regenerate: '兜底重生成',
   photo_purge: '永久删除',
 }
@@ -115,11 +110,6 @@ onMounted(() => {
           <option value="">All</option>
           <option value="photo_ingest">Photo Ingest</option>
           <option value="reverse_geocode">Reverse Geocode</option>
-          <option value="vision_analyze">Vision Analyze</option>
-          <option value="slide_design_generate">Slide Design</option>
-          <option value="caption_regenerate">Caption Regenerate</option>
-          <option value="template_regenerate">Template Regenerate</option>
-          <option value="css_regenerate">CSS Regenerate</option>
           <option value="fallback_regenerate">Fallback Regenerate</option>
           <option value="photo_purge">Photo Purge</option>
         </select>
@@ -159,7 +149,6 @@ onMounted(() => {
             <th class="px-3 py-3 font-semibold">Photo</th>
             <th class="px-3 py-3 font-semibold">Status</th>
             <th class="px-3 py-3 font-semibold">Attempts</th>
-            <th class="px-3 py-3 font-semibold">AI</th>
             <th class="px-3 py-3 font-semibold">Error</th>
             <th class="px-3 py-3 font-semibold">Created</th>
             <th class="px-3 py-3 font-semibold">Actions</th>
@@ -167,10 +156,10 @@ onMounted(() => {
         </thead>
         <tbody class="divide-y divide-stone-100">
           <tr v-if="pending">
-            <td class="px-3 py-4 text-stone-600" colspan="9">Loading jobs</td>
+            <td class="px-3 py-4 text-stone-600" colspan="8">Loading jobs</td>
           </tr>
           <tr v-else-if="!jobs.length">
-            <td class="px-3 py-4 text-stone-600" colspan="9">No jobs</td>
+            <td class="px-3 py-4 text-stone-600" colspan="8">No jobs</td>
           </tr>
           <tr v-for="job in jobs" v-else :key="job.id" :class="job.status === 'failed' ? 'bg-red-50/40' : ''">
             <td class="px-3 py-3 font-mono text-xs">{{ job.id.slice(0, 8) }}…</td>
@@ -198,13 +187,6 @@ onMounted(() => {
               </span>
             </td>
             <td class="px-3 py-3">{{ job.attempts }} / {{ job.max_attempts }}</td>
-            <td class="px-3 py-3 text-xs text-stone-600">
-              <div v-if="job.ai_provider || job.ai_model">
-                <p>{{ job.ai_provider || 'AI' }}</p>
-                <p class="text-stone-500">{{ job.ai_model || job.ai_prompt_version || '-' }}</p>
-              </div>
-              <span v-else>-</span>
-            </td>
             <td class="px-3 py-3 max-w-48 truncate text-xs text-red-600">{{ job.error_message || '-' }}</td>
             <td class="px-3 py-3 whitespace-nowrap">{{ formatDate(job.created_at) }}</td>
             <td class="px-3 py-3">

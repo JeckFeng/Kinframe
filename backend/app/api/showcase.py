@@ -10,7 +10,7 @@ from app.schemas.photo import PhotoCategoryRead, PhotoRead
 from app.schemas.showcase import ShowcasePhotoItem, ShowcaseResponse
 from app.services.categories import list_active_categories
 from app.services.photos import PHOTO_STATUS_READY, list_photos
-from app.services.slide_designs import get_latest_active_slide_design
+from app.services.slide_designs import get_latest_display_slide_design
 from app.services.storage import ObjectStorage
 
 router = APIRouter(prefix="/api/showcase", tags=["showcase"])
@@ -39,7 +39,7 @@ def get_showcase(
             preview_url = storage.presigned_get_url(photo.object_key_preview)
 
         slide_design = None
-        design = get_latest_active_slide_design(db, photo.id)
+        design = get_latest_display_slide_design(db, photo.id)
         if design is not None:
             slide_design = design.design_json
 

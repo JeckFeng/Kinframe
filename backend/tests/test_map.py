@@ -151,7 +151,7 @@ def seed_geocoded_photo(
                  file_size, sha256, taken_at, uploaded_at, created_at, updated_at,
                  gps_lat, gps_lng, geocoding_status, geocoding_provider, geocoded_at,
                  location_city, location_region, location_country, status,
-                 ai_caption_enabled, ai_category_enabled, include_in_showcase)
+                 include_in_showcase)
                 VALUES
                 (:id, :owner_id, :category, 'user', 'user',
                  :final_caption, 'uploaded_at', 'test-photos', 'originals/test/o',
@@ -159,7 +159,7 @@ def seed_geocoded_photo(
                  1024, :sha256, :taken_at, :uploaded_at, :created_at, :updated_at,
                  :gps_lat, :gps_lng, :geocoding_status, :geocoding_provider, :geocoded_at,
                  :location_city, :location_region, :location_country, :status,
-                 false, false, true)"""
+                 true)"""
             ),
             {
                 "id": photo_id,

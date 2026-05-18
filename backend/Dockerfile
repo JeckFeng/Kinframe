@@ -26,8 +26,7 @@ RUN apt-get update -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
         tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="/usr/local/bin" sh
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --default-index https://pypi.tuna.tsinghua.edu.cn/simple
