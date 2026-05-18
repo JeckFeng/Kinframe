@@ -12,6 +12,7 @@ import type {
 const DEFAULT_VIEWPORT_HEIGHT_PX = 900
 const DEFAULT_LOOP_SPAN_PX = 960
 const DEFAULT_MASK_SPEED_MULTIPLIER = 1.5
+const SHOWCASE_GLOBAL_SCALE = 1.5
 const DEFAULT_CONFIG = {
   loop: true,
   wheelMultiplier: 1,
@@ -24,6 +25,10 @@ const DEFAULT_CONFIG = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+function scaleByShowcaseFactor(value: number): number {
+  return Math.round(value * SHOWCASE_GLOBAL_SCALE)
 }
 
 function normalizeLoopX(value: number, loopSpanPx: number): number {
@@ -81,10 +86,15 @@ function computeDirection(previousIndex: number, nextIndex: number, length: numb
 
 export function computeStripLayouts(photos: ShowcasePhotoItem[], viewportHeightPx: number) {
   const safeViewportHeightPx = viewportHeightPx > 0 ? viewportHeightPx : DEFAULT_VIEWPORT_HEIGHT_PX
-  const frameHeightPx = Math.round(clamp(safeViewportHeightPx * 0.34, 220, 380))
-  const frameWidthPx = Math.round(clamp(frameHeightPx * 1.28, 280, 520))
-  const mattePadXPx = Math.round(clamp(frameHeightPx * 0.16, 30, 68))
-  const mattePadYPx = Math.round(clamp(frameHeightPx * 0.18, 32, 74))
+  const baseFrameHeightPx = clamp(safeViewportHeightPx * 0.34, 220, 380)
+  const baseFrameWidthPx = clamp(baseFrameHeightPx * 1.28, 280, 520)
+  const baseMattePadXPx = clamp(baseFrameHeightPx * 0.16, 30, 68)
+  const baseMattePadYPx = clamp(baseFrameHeightPx * 0.18, 32, 74)
+
+  const frameHeightPx = scaleByShowcaseFactor(baseFrameHeightPx)
+  const frameWidthPx = scaleByShowcaseFactor(baseFrameWidthPx)
+  const mattePadXPx = scaleByShowcaseFactor(baseMattePadXPx)
+  const mattePadYPx = scaleByShowcaseFactor(baseMattePadYPx)
 
   let cursorPx = 0
   const layouts: ShowcaseStripItemLayout[] = photos.map((_, index) => {
@@ -157,7 +167,7 @@ function makeCardStates(
       index: layout.index,
       captionTranslateX: reducedMotion ? 0 : clamp(-centerDistance * 0.08, -22, 22),
       timeTranslateX: reducedMotion ? 0 : clamp(-centerDistance * 0.05, -16, 16),
-      opacity: isActive ? 1 : Math.max(0.58, 1 - distanceFactor * 0.22),
+      opacity: 1,
       normalizedProgress,
       isVisible: Math.abs(centerDistance) <= layout.frameWidthPx * 1.8 + overscanPx,
       isActive,

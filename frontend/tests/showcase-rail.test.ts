@@ -325,6 +325,19 @@ describe('useShowcaseRail', () => {
     )
   })
 
+  it('applies the global showcase scale to images, holes, and matte sizes together', () => {
+    const metrics = computeStripLayouts([makeShowcasePhotoItem('photo-1')], 900)
+
+    expect(metrics.layouts[0]).toMatchObject({
+      frameWidthPx: 470,
+      frameHeightPx: 367,
+      matteWidthPx: 588,
+      matteHeightPx: 499,
+      holeWidthPx: 470,
+      holeHeightPx: 367,
+    })
+  })
+
   it('anchors both strips on the viewport centerline and only offsets each track by half its own height', () => {
     expect(computeLayerOffsets({
       viewportWidthPx: 1200,

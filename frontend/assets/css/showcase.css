@@ -130,7 +130,7 @@
   flex: 0 0 var(--slot-width);
   width: var(--slot-width);
   height: var(--slot-height);
-  opacity: var(--slot-opacity, 1);
+  opacity: 1;
   transition: opacity 320ms var(--showcase-ease);
   overflow: visible;
 }

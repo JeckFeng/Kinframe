@@ -30,7 +30,6 @@ const shellStyle = computed(() => ({
   '--hole-height': `${props.layout.holeHeightPx}px`,
   '--caption-translate-x': `${props.visual.captionTranslateX}px`,
   '--time-translate-x': `${props.visual.timeTranslateX}px`,
-  '--slot-opacity': String(props.visual.opacity),
   '--slot-progress': String(props.visual.normalizedProgress),
 }))
 

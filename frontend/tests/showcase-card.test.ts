@@ -90,6 +90,7 @@ describe('ShowcaseCard', () => {
     expect(shell.attributes('style')).toContain('--hole-width: 230px;')
     expect(shell.attributes('style')).toContain('--caption-translate-x: 8px;')
     expect(shell.attributes('style')).toContain('--time-translate-x: 6px;')
+    expect(shell.attributes('style')).not.toContain('--slot-opacity')
     expect(wrapper.findAll('.showcase-mask-matte')).toHaveLength(4)
     expect(wrapper.find('.showcase-mask-hole').exists()).toBe(true)
     expect(wrapper.find('.showcase-mask-caption-band').exists()).toBe(true)
