@@ -15,9 +15,60 @@
   --showcase-progress-thumb-height: 48px;
   --showcase-progress-thumb-opacity: 0.4;
   --showcase-progress-thumb-active-scale: 1.08;
-  --showcase-time-size: 12px;
-  --showcase-location-size: 12px;
-  --showcase-copy-size: 15px;
+  --showcase-info-time-font-family-desktop: inherit;
+  --showcase-info-time-font-style-desktop: normal;
+  --showcase-info-time-font-size-desktop: 12px;
+  --showcase-info-time-font-weight-desktop: 500;
+  --showcase-info-time-letter-spacing-desktop: 0.14em;
+  --showcase-info-time-line-height-desktop: 1.2;
+  --showcase-info-time-text-transform-desktop: uppercase;
+  --showcase-info-time-color-desktop: rgba(255, 255, 255, 0.96);
+  --showcase-info-time-text-shadow-desktop: 0 1px 10px rgba(0, 0, 0, 0.42);
+  --showcase-info-time-font-family-mobile: inherit;
+  --showcase-info-time-font-style-mobile: normal;
+  --showcase-info-time-font-size-mobile: 11px;
+  --showcase-info-time-font-weight-mobile: 500;
+  --showcase-info-time-letter-spacing-mobile: 0.12em;
+  --showcase-info-time-line-height-mobile: 1.2;
+  --showcase-info-time-text-transform-mobile: uppercase;
+  --showcase-info-time-color-mobile: rgba(255, 255, 255, 0.96);
+  --showcase-info-time-text-shadow-mobile: 0 1px 10px rgba(0, 0, 0, 0.42);
+  --showcase-info-time-font-family: var(--showcase-info-time-font-family-desktop);
+  --showcase-info-time-font-style: var(--showcase-info-time-font-style-desktop);
+  --showcase-info-time-font-size: var(--showcase-info-time-font-size-desktop);
+  --showcase-info-time-font-weight: var(--showcase-info-time-font-weight-desktop);
+  --showcase-info-time-letter-spacing: var(--showcase-info-time-letter-spacing-desktop);
+  --showcase-info-time-line-height: var(--showcase-info-time-line-height-desktop);
+  --showcase-info-time-text-transform: var(--showcase-info-time-text-transform-desktop);
+  --showcase-info-time-color: var(--showcase-info-time-color-desktop);
+  --showcase-info-time-text-shadow: var(--showcase-info-time-text-shadow-desktop);
+  --showcase-info-location-font-family-desktop: inherit;
+  --showcase-info-location-font-style-desktop: normal;
+  --showcase-info-location-font-size-desktop: 12px;
+  --showcase-info-location-font-weight-desktop: 500;
+  --showcase-info-location-letter-spacing-desktop: 0.12em;
+  --showcase-info-location-line-height-desktop: 1.25;
+  --showcase-info-location-text-transform-desktop: uppercase;
+  --showcase-info-location-color-desktop: rgba(255, 255, 255, 0.58);
+  --showcase-info-location-text-shadow-desktop: 0 1px 10px rgba(0, 0, 0, 0.42);
+  --showcase-info-location-font-family-mobile: inherit;
+  --showcase-info-location-font-style-mobile: normal;
+  --showcase-info-location-font-size-mobile: 11px;
+  --showcase-info-location-font-weight-mobile: 500;
+  --showcase-info-location-letter-spacing-mobile: 0.1em;
+  --showcase-info-location-line-height-mobile: 1.25;
+  --showcase-info-location-text-transform-mobile: uppercase;
+  --showcase-info-location-color-mobile: rgba(255, 255, 255, 0.62);
+  --showcase-info-location-text-shadow-mobile: 0 1px 10px rgba(0, 0, 0, 0.42);
+  --showcase-info-location-font-family: var(--showcase-info-location-font-family-desktop);
+  --showcase-info-location-font-style: var(--showcase-info-location-font-style-desktop);
+  --showcase-info-location-font-size: var(--showcase-info-location-font-size-desktop);
+  --showcase-info-location-font-weight: var(--showcase-info-location-font-weight-desktop);
+  --showcase-info-location-letter-spacing: var(--showcase-info-location-letter-spacing-desktop);
+  --showcase-info-location-line-height: var(--showcase-info-location-line-height-desktop);
+  --showcase-info-location-text-transform: var(--showcase-info-location-text-transform-desktop);
+  --showcase-info-location-color: var(--showcase-info-location-color-desktop);
+  --showcase-info-location-text-shadow: var(--showcase-info-location-text-shadow-desktop);
   --showcase-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --showcase-slide-tilt: var(--showcase-slide-tilt-desktop);
 }
@@ -101,6 +152,11 @@
   pointer-events: none;
 }
 
+.showcase-slide-layer-info {
+  z-index: 3;
+  pointer-events: none;
+}
+
 .showcase-slide {
   position: absolute;
   left: 0;
@@ -112,6 +168,10 @@
 }
 
 .showcase-slide-mask {
+  pointer-events: none;
+}
+
+.showcase-slide-info {
   pointer-events: none;
 }
 
@@ -166,6 +226,29 @@
 
 .showcase-cursor[data-visible="false"] {
   opacity: 0 !important;
+}
+
+.showcase-info-slot-shell {
+  position: relative;
+  flex: 0 0 var(--info-slot-width);
+  width: var(--info-slot-width);
+  height: var(--info-slot-height);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--showcase-ease);
+}
+
+.showcase-info-slot-shell[data-visible="true"] {
+  opacity: 1;
+}
+
+.showcase-info-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--info-frame-width);
+  height: var(--info-frame-height);
+  transform: translate3d(0, var(--info-frame-offset-y, 0px), 0);
 }
 
 .showcase-mask-slot-shell {
@@ -235,72 +318,40 @@
   transform: translate(-50%, -50%);
 }
 
-.showcase-mask-time {
+.showcase-info-time {
   position: absolute;
   right: 0.9rem;
   top: 0.85rem;
-  z-index: 4;
+  z-index: 2;
   margin: 0;
   padding: 0;
-  color: rgba(255, 255, 255, 0.96);
-  font-size: var(--showcase-time-size);
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  line-height: 1.2;
-  text-transform: uppercase;
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.42);
-  transform: translate3d(var(--time-translate-x, 0px), 0, 0);
-  transition: transform 320ms var(--showcase-ease), opacity 320ms var(--showcase-ease);
+  color: var(--showcase-info-time-color);
+  font-family: var(--showcase-info-time-font-family);
+  font-style: var(--showcase-info-time-font-style);
+  font-size: var(--showcase-info-time-font-size);
+  font-weight: var(--showcase-info-time-font-weight);
+  letter-spacing: var(--showcase-info-time-letter-spacing);
+  line-height: var(--showcase-info-time-line-height);
+  text-transform: var(--showcase-info-time-text-transform);
+  text-shadow: var(--showcase-info-time-text-shadow);
 }
 
-.showcase-mask-caption-band {
+.showcase-info-location {
   position: absolute;
   left: 1rem;
   bottom: 1rem;
-  z-index: 4;
-  width: min(78%, 22rem);
-  padding: 0;
-  background: rgba(238, 6, 6, 0.8);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
-  transform: translate3d(var(--caption-translate-x, 0px), 0, 0);
-  transition: transform 320ms var(--showcase-ease), opacity 320ms var(--showcase-ease);
-}
-
-.showcase-mask-caption {
-  display: grid;
-  gap: 0.45rem;
-  padding: 0.95rem 1.1rem 0.95rem;
-  background: rgba(213, 12, 12, 0.8);
-}
-
-.showcase-mask-location,
-.showcase-mask-copy {
+  z-index: 2;
+  max-width: min(78%, 22rem);
   margin: 0;
-}
-
-.showcase-mask-location {
-  color: var(--showcase-text-muted);
-  font-size: var(--showcase-location-size);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  line-height: 1.25;
-  text-transform: uppercase;
-}
-
-.showcase-mask-copy {
-  color: var(--showcase-text);
-  font-size: var(--showcase-copy-size);
-  font-weight: 500;
-  line-height: 1.52;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-
-.showcase-mask-slot-shell[data-active="false"] .showcase-mask-caption-band,
-.showcase-mask-slot-shell[data-active="false"] .showcase-mask-time {
-  opacity: 0.78;
+  color: var(--showcase-info-location-color);
+  font-family: var(--showcase-info-location-font-family);
+  font-style: var(--showcase-info-location-font-style);
+  font-size: var(--showcase-info-location-font-size);
+  font-weight: var(--showcase-info-location-font-weight);
+  letter-spacing: var(--showcase-info-location-letter-spacing);
+  line-height: var(--showcase-info-location-line-height);
+  text-transform: var(--showcase-info-location-text-transform);
+  text-shadow: var(--showcase-info-location-text-shadow);
 }
 
 .showcase-progress-strip {
@@ -369,6 +420,24 @@
 @media (max-width: 768px) {
   :root {
     --showcase-slide-tilt: var(--showcase-slide-tilt-mobile);
+    --showcase-info-time-font-family: var(--showcase-info-time-font-family-mobile);
+    --showcase-info-time-font-style: var(--showcase-info-time-font-style-mobile);
+    --showcase-info-time-font-size: var(--showcase-info-time-font-size-mobile);
+    --showcase-info-time-font-weight: var(--showcase-info-time-font-weight-mobile);
+    --showcase-info-time-letter-spacing: var(--showcase-info-time-letter-spacing-mobile);
+    --showcase-info-time-line-height: var(--showcase-info-time-line-height-mobile);
+    --showcase-info-time-text-transform: var(--showcase-info-time-text-transform-mobile);
+    --showcase-info-time-color: var(--showcase-info-time-color-mobile);
+    --showcase-info-time-text-shadow: var(--showcase-info-time-text-shadow-mobile);
+    --showcase-info-location-font-family: var(--showcase-info-location-font-family-mobile);
+    --showcase-info-location-font-style: var(--showcase-info-location-font-style-mobile);
+    --showcase-info-location-font-size: var(--showcase-info-location-font-size-mobile);
+    --showcase-info-location-font-weight: var(--showcase-info-location-font-weight-mobile);
+    --showcase-info-location-letter-spacing: var(--showcase-info-location-letter-spacing-mobile);
+    --showcase-info-location-line-height: var(--showcase-info-location-line-height-mobile);
+    --showcase-info-location-text-transform: var(--showcase-info-location-text-transform-mobile);
+    --showcase-info-location-color: var(--showcase-info-location-color-mobile);
+    --showcase-info-location-text-shadow: var(--showcase-info-location-text-shadow-mobile);
   }
 
   .showcase-stage-progress {
@@ -376,31 +445,24 @@
     bottom: 0.75rem;
   }
 
-  .showcase-mask-caption-band {
+  .showcase-info-location {
     left: 0.7rem;
     bottom: 0.7rem;
-    width: min(82%, 18rem);
+    max-width: min(82%, 18rem);
   }
 
-  .showcase-mask-caption {
-    padding: 0.8rem 0.95rem 0.85rem;
-  }
-
-  .showcase-mask-time {
+  .showcase-info-time {
     right: 0.72rem;
     top: 0.68rem;
-  }
-
-  .showcase-mask-copy {
-    -webkit-line-clamp: 2;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .showcase-slide,
   .showcase-mask-slot-shell,
-  .showcase-mask-time,
-  .showcase-mask-caption-band,
+  .showcase-info-slot-shell,
+  .showcase-info-time,
+  .showcase-info-location,
   .showcase-progress-thumb {
     transition: none !important;
   }

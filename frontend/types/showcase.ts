@@ -110,13 +110,19 @@ export interface ShowcaseRailProps {
 }
 
 export interface ShowcaseCardProps {
-  item: ShowcasePhotoItem
   index: number
   layout: ShowcaseStripItemLayout
   visual: ShowcaseCardVisualState
+}
+
+export interface ShowcaseInfoOverlayItemProps {
+  item: ShowcasePhotoItem
+  index: number
+  copyLabel: string
+  layout: ShowcaseStripItemLayout
   timeLabel: string
   locationLabel: string
-  captionLabel: string
+  visible: boolean
 }
 
 export interface ShowcaseProgressStripProps {
@@ -146,6 +152,8 @@ export interface UseShowcaseRailReturn {
   railRef: Ref<HTMLElement | null>
   layouts: ShallowRef<ShowcaseStripItemLayout[]>
   cardStates: ShallowRef<ShowcaseCardVisualState[]>
+  hoveredIndex: Ref<number | null>
+  hoveredCopy: Ref<string | null>
   activeIndex: Ref<number>
   currentX: Ref<number>
   targetX: Ref<number>
@@ -165,6 +173,8 @@ export interface UseShowcaseRailReturn {
   onTouchStart: (event: TouchEvent) => void
   onTouchMove: (event: TouchEvent) => void
   onTouchEnd: (event: TouchEvent) => void
+  setHoveredSlot: (index: number, copyLabel: string) => void
+  clearHoveredSlot: () => void
   jumpToIndex: (index: number, source?: ShowcaseRailInteractionSource) => void
   jumpBy: (step: number, source?: ShowcaseRailInteractionSource) => void
   restoreSnapshot: (snapshot: ShowcaseRailSnapshot | null | undefined) => void

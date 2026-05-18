@@ -214,6 +214,8 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
   const railRef = ref<HTMLElement | null>(null)
   const layouts = shallowRef<ShowcaseStripItemLayout[]>([])
   const cardStates = shallowRef<ShowcaseCardVisualState[]>([])
+  const hoveredIndex = ref<number | null>(null)
+  const hoveredCopy = ref<string | null>(null)
   const activeIndex = ref(0)
   const currentX = ref(0)
   const targetX = ref(0)
@@ -512,6 +514,16 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     }
   }
 
+  function setHoveredSlot(index: number, copyLabel: string) {
+    hoveredIndex.value = index
+    hoveredCopy.value = copyLabel
+  }
+
+  function clearHoveredSlot() {
+    hoveredIndex.value = null
+    hoveredCopy.value = null
+  }
+
   function moveToResolvedCenter(
     resolvedCenterPx: number,
     nextActiveIndex: number,
@@ -591,6 +603,7 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     stopTick()
     isTouchDragging.value = false
     touchStartX.value = null
+    clearHoveredSlot()
     setInteractionState('suspended', activeSource.value)
   }
 
@@ -606,6 +619,7 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
 
   function destroy() {
     stopTick()
+    clearHoveredSlot()
   }
 
   if (options.initialSnapshot.value) {
@@ -616,6 +630,7 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     if (!nextPhotos.length) {
       layouts.value = []
       cardStates.value = []
+      clearHoveredSlot()
       activeIndex.value = 0
       currentX.value = 0
       targetX.value = 0
@@ -655,6 +670,8 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     railRef,
     layouts,
     cardStates,
+    hoveredIndex,
+    hoveredCopy,
     activeIndex,
     currentX,
     targetX,
@@ -674,6 +691,8 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     onTouchStart,
     onTouchMove,
     onTouchEnd,
+    setHoveredSlot,
+    clearHoveredSlot,
     jumpToIndex,
     jumpBy,
     restoreSnapshot,

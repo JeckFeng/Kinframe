@@ -68,3 +68,112 @@
 - 想调黑色遮罩外框大小：先看 `frontend/composables/useShowcaseRail.ts:116-117`
 - 想调前景/背景速度差：先看 `frontend/composables/useShowcaseRail.ts:14,187,202`
 - 想调黑色和透明度：先看 `frontend/assets/css/showcase.css:149-153,227,237`
+
+## 时间与地点文字全局参数
+
+这组参数都定义在：
+
+- `frontend/assets/css/showcase.css:1-31`
+
+生效规则：
+
+1. `-desktop` 变量保存桌面端参数
+2. `-mobile` 变量保存移动端参数
+3. 不带后缀的变量是当前生效变量
+4. `max-width: 768px` 时，不带后缀的变量会自动切到 `-mobile`
+
+### 时间文字参数
+
+桌面端原始变量：
+
+| 参数 | 当前值 | 作用 |
+|---|---|---|
+| `--showcase-info-time-font-family-desktop` | `inherit` | 时间文字桌面端字体族 |
+| `--showcase-info-time-font-style-desktop` | `normal` | 时间文字桌面端字形 |
+| `--showcase-info-time-font-size-desktop` | `12px` | 时间文字桌面端字号 |
+| `--showcase-info-time-font-weight-desktop` | `500` | 时间文字桌面端字重 |
+| `--showcase-info-time-letter-spacing-desktop` | `0.14em` | 时间文字桌面端字距 |
+| `--showcase-info-time-line-height-desktop` | `1.2` | 时间文字桌面端行高 |
+| `--showcase-info-time-text-transform-desktop` | `uppercase` | 时间文字桌面端大小写转换 |
+| `--showcase-info-time-color-desktop` | `rgba(255, 255, 255, 0.96)` | 时间文字桌面端颜色 |
+| `--showcase-info-time-text-shadow-desktop` | `0 1px 10px rgba(0, 0, 0, 0.42)` | 时间文字桌面端阴影 |
+
+移动端原始变量：
+
+| 参数 | 当前值 | 作用 |
+|---|---|---|
+| `--showcase-info-time-font-family-mobile` | `inherit` | 时间文字移动端字体族 |
+| `--showcase-info-time-font-style-mobile` | `normal` | 时间文字移动端字形 |
+| `--showcase-info-time-font-size-mobile` | `11px` | 时间文字移动端字号 |
+| `--showcase-info-time-font-weight-mobile` | `500` | 时间文字移动端字重 |
+| `--showcase-info-time-letter-spacing-mobile` | `0.12em` | 时间文字移动端字距 |
+| `--showcase-info-time-line-height-mobile` | `1.2` | 时间文字移动端行高 |
+| `--showcase-info-time-text-transform-mobile` | `uppercase` | 时间文字移动端大小写转换 |
+| `--showcase-info-time-color-mobile` | `rgba(255, 255, 255, 0.96)` | 时间文字移动端颜色 |
+| `--showcase-info-time-text-shadow-mobile` | `0 1px 10px rgba(0, 0, 0, 0.42)` | 时间文字移动端阴影 |
+
+当前生效变量：
+
+| 参数 | 当前默认值 | 作用 |
+|---|---|---|
+| `--showcase-info-time-font-family` | `var(--showcase-info-time-font-family-desktop)` | 时间文字当前生效字体族 |
+| `--showcase-info-time-font-style` | `var(--showcase-info-time-font-style-desktop)` | 时间文字当前生效字形 |
+| `--showcase-info-time-font-size` | `var(--showcase-info-time-font-size-desktop)` | 时间文字当前生效字号 |
+| `--showcase-info-time-font-weight` | `var(--showcase-info-time-font-weight-desktop)` | 时间文字当前生效字重 |
+| `--showcase-info-time-letter-spacing` | `var(--showcase-info-time-letter-spacing-desktop)` | 时间文字当前生效字距 |
+| `--showcase-info-time-line-height` | `var(--showcase-info-time-line-height-desktop)` | 时间文字当前生效行高 |
+| `--showcase-info-time-text-transform` | `var(--showcase-info-time-text-transform-desktop)` | 时间文字当前生效大小写转换 |
+| `--showcase-info-time-color` | `var(--showcase-info-time-color-desktop)` | 时间文字当前生效颜色 |
+| `--showcase-info-time-text-shadow` | `var(--showcase-info-time-text-shadow-desktop)` | 时间文字当前生效阴影 |
+
+时间文字实际使用位置：
+
+- `frontend/assets/css/showcase.css:270-284`
+
+### 地点文字参数
+
+桌面端原始变量：
+
+| 参数 | 当前值 | 作用 |
+|---|---|---|
+| `--showcase-info-location-font-family-desktop` | `inherit` | 地点文字桌面端字体族 |
+| `--showcase-info-location-font-style-desktop` | `normal` | 地点文字桌面端字形 |
+| `--showcase-info-location-font-size-desktop` | `12px` | 地点文字桌面端字号 |
+| `--showcase-info-location-font-weight-desktop` | `500` | 地点文字桌面端字重 |
+| `--showcase-info-location-letter-spacing-desktop` | `0.12em` | 地点文字桌面端字距 |
+| `--showcase-info-location-line-height-desktop` | `1.25` | 地点文字桌面端行高 |
+| `--showcase-info-location-text-transform-desktop` | `uppercase` | 地点文字桌面端大小写转换 |
+| `--showcase-info-location-color-desktop` | `rgba(255, 255, 255, 0.58)` | 地点文字桌面端颜色 |
+| `--showcase-info-location-text-shadow-desktop` | `0 1px 10px rgba(0, 0, 0, 0.42)` | 地点文字桌面端阴影 |
+
+移动端原始变量：
+
+| 参数 | 当前值 | 作用 |
+|---|---|---|
+| `--showcase-info-location-font-family-mobile` | `inherit` | 地点文字移动端字体族 |
+| `--showcase-info-location-font-style-mobile` | `normal` | 地点文字移动端字形 |
+| `--showcase-info-location-font-size-mobile` | `11px` | 地点文字移动端字号 |
+| `--showcase-info-location-font-weight-mobile` | `500` | 地点文字移动端字重 |
+| `--showcase-info-location-letter-spacing-mobile` | `0.1em` | 地点文字移动端字距 |
+| `--showcase-info-location-line-height-mobile` | `1.25` | 地点文字移动端行高 |
+| `--showcase-info-location-text-transform-mobile` | `uppercase` | 地点文字移动端大小写转换 |
+| `--showcase-info-location-color-mobile` | `rgba(255, 255, 255, 0.62)` | 地点文字移动端颜色 |
+| `--showcase-info-location-text-shadow-mobile` | `0 1px 10px rgba(0, 0, 0, 0.42)` | 地点文字移动端阴影 |
+
+当前生效变量：
+
+| 参数 | 当前默认值 | 作用 |
+|---|---|---|
+| `--showcase-info-location-font-family` | `var(--showcase-info-location-font-family-desktop)` | 地点文字当前生效字体族 |
+| `--showcase-info-location-font-style` | `var(--showcase-info-location-font-style-desktop)` | 地点文字当前生效字形 |
+| `--showcase-info-location-font-size` | `var(--showcase-info-location-font-size-desktop)` | 地点文字当前生效字号 |
+| `--showcase-info-location-font-weight` | `var(--showcase-info-location-font-weight-desktop)` | 地点文字当前生效字重 |
+| `--showcase-info-location-letter-spacing` | `var(--showcase-info-location-letter-spacing-desktop)` | 地点文字当前生效字距 |
+| `--showcase-info-location-line-height` | `var(--showcase-info-location-line-height-desktop)` | 地点文字当前生效行高 |
+| `--showcase-info-location-text-transform` | `var(--showcase-info-location-text-transform-desktop)` | 地点文字当前生效大小写转换 |
+| `--showcase-info-location-color` | `var(--showcase-info-location-color-desktop)` | 地点文字当前生效颜色 |
+| `--showcase-info-location-text-shadow` | `var(--showcase-info-location-text-shadow-desktop)` | 地点文字当前生效阴影 |
+
+地点文字实际使用位置：
+
+- `frontend/assets/css/showcase.css:286-300`

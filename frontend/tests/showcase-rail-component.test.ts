@@ -56,7 +56,7 @@ describe('ShowcaseRail component', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders seven repeated background copies and seven repeated mask copies for seamless infinite scrolling', () => {
+  it('renders seven repeated background, info, and mask copies for seamless infinite scrolling', () => {
     const wrapper = mount(ShowcaseRail, {
       props: {
         photos: [makeShowcasePhotoItem('photo-1'), makeShowcasePhotoItem('photo-2')],
@@ -64,8 +64,10 @@ describe('ShowcaseRail component', () => {
     })
 
     expect(wrapper.findAll('.showcase-slide-copy-background')).toHaveLength(7)
+    expect(wrapper.findAll('.showcase-slide-copy-info')).toHaveLength(7)
     expect(wrapper.findAll('.showcase-slide-copy-mask')).toHaveLength(7)
     expect(wrapper.findAll('.showcase-mask-slot-shell')).toHaveLength(14)
+    expect(wrapper.findAll('.showcase-info-slot-shell')).toHaveLength(14)
     expect(wrapper.findAll('.showcase-slide-image')).toHaveLength(14)
   })
 
@@ -86,5 +88,21 @@ describe('ShowcaseRail component', () => {
 
     const activeSlot = wrapper.get('.showcase-slide-copy-mask[data-copy="current"] .showcase-mask-slot-shell[data-active="true"]')
     expect(activeSlot.attributes('data-index')).toBe('1')
+  })
+
+  it('shows only the hovered info overlay item in the matching repeated copy', async () => {
+    const wrapper = mount(ShowcaseRail, {
+      props: {
+        photos: [makeShowcasePhotoItem('photo-1'), makeShowcasePhotoItem('photo-2')],
+      },
+    })
+
+    const currentCopyImages = wrapper.findAll('.showcase-slide-copy-background[data-copy="current"] .showcase-slide-image')
+    await currentCopyImages[1]?.trigger('pointerenter')
+
+    const visibleInfo = wrapper.get('.showcase-info-slot-shell[data-visible="true"]')
+    expect(visibleInfo.attributes('data-copy')).toBe('current')
+    expect(visibleInfo.attributes('data-index')).toBe('1')
+    expect(wrapper.findAll('.showcase-info-slot-shell[data-visible="true"]')).toHaveLength(1)
   })
 })

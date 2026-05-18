@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, toRef, watch } from 'vu
 import type { ShowcaseRailProps, ShowcaseStripItemLayout } from '~/types/showcase'
 import { getShowcaseRenderCopyLabels, useShowcaseRail } from '~/composables/useShowcaseRail'
 import ShowcaseCard from './ShowcaseCard.vue'
+import ShowcaseInfoOverlayItem from './ShowcaseInfoOverlayItem.vue'
 
 const props = withDefaults(defineProps<ShowcaseRailProps>(), {
   initialSnapshot: null,
@@ -36,10 +37,16 @@ const layerCopies = getShowcaseRenderCopyLabels()
 const backgroundLayerStyle = computed(() => ({
   transform: 'rotate(var(--showcase-slide-tilt))',
 }))
+const infoLayerStyle = computed(() => ({
+  transform: 'rotate(var(--showcase-slide-tilt))',
+}))
 const foregroundLayerStyle = computed(() => ({
   transform: 'rotate(var(--showcase-slide-tilt))',
 }))
 const backgroundTrackStyle = computed(() => ({
+  transform: `translate3d(${rail.backgroundOffsetXPx.value + rail.backgroundTravelXPx.value}px, ${rail.backgroundOffsetYPx.value}px, 0)`,
+}))
+const infoTrackStyle = computed(() => ({
   transform: `translate3d(${rail.backgroundOffsetXPx.value + rail.backgroundTravelXPx.value}px, ${rail.backgroundOffsetYPx.value}px, 0)`,
 }))
 const foregroundTrackStyle = computed(() => ({
@@ -145,8 +152,35 @@ defineExpose({
                 alt=""
                 draggable="false"
                 :style="getBackgroundImageStyle(layouts[index])"
+                @pointerenter="rail.setHoveredSlot(index, copy)"
+                @pointerleave="rail.clearHoveredSlot()"
+                @pointercancel="rail.clearHoveredSlot()"
               >
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="showcase-slide-layer showcase-slide-layer-info" :style="infoLayerStyle">
+        <div class="showcase-slide showcase-slide-info" :style="infoTrackStyle">
+          <div
+            v-for="copy in layerCopies"
+            :key="`info:${copy}`"
+            class="showcase-slide-copy showcase-slide-copy-info"
+            :data-copy="copy"
+          >
+            <template v-for="(item, index) in props.photos" :key="`info:${copy}:${item.photo.id}`">
+              <ShowcaseInfoOverlayItem
+                v-if="layouts[index]"
+                :item="item"
+                :index="index"
+                :copy-label="copy"
+                :layout="layouts[index]"
+                :time-label="item.photo.taken_at"
+                :location-label="item.photo.location_city || item.photo.location_name || ''"
+                :visible="rail.hoveredIndex.value === index && rail.hoveredCopy.value === copy"
+              />
+            </template>
           </div>
         </div>
       </div>
@@ -162,13 +196,9 @@ defineExpose({
             <template v-for="(item, index) in props.photos" :key="`fg:${copy}:${item.photo.id}`">
               <ShowcaseCard
                 v-if="layouts[index] && cardStates[index]"
-                :item="item"
                 :index="index"
                 :layout="layouts[index]"
                 :visual="cardStates[index]"
-                :time-label="item.photo.taken_at"
-                :location-label="item.photo.location_city || item.photo.location_name || ''"
-                :caption-label="item.photo.final_caption || item.photo.user_message || ''"
               />
             </template>
           </div>

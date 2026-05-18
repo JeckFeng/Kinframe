@@ -6,7 +6,6 @@ const { apiFetch } = useApi()
 const { formatBytes } = useFormat()
 const fileInput = ref<HTMLInputElement | null>(null)
 const category = ref<string>('')
-const userMessage = ref('')
 const includeInShowcase = ref(true)
 const selectedFiles = ref<File[]>([])
 const pending = ref(false)
@@ -109,9 +108,6 @@ async function submitUpload() {
     formData.append('files', file)
   }
   if (category.value) formData.set('category', category.value)
-  if (userMessage.value.trim()) {
-    formData.set('user_message', userMessage.value.trim())
-  }
   formData.set('include_in_showcase', String(includeInShowcase.value))
 
   pending.value = true
@@ -172,15 +168,6 @@ onBeforeUnmount(stopProcessingPoll)
           <option value="photography">摄影照</option>
           <option value="pet">宠物照</option>
         </select>
-      </label>
-
-      <label class="block">
-        <span class="mb-1 block text-sm font-medium text-stone-700">Message</span>
-        <textarea
-          v-model="userMessage"
-          class="focus-ring min-h-28 w-full rounded-md border border-stone-300 bg-white px-3 py-2"
-          maxlength="2000"
-        />
       </label>
 
       <div class="space-y-3 rounded-md border border-stone-200 bg-stone-50 p-4">
