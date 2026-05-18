@@ -49,7 +49,14 @@ const foregroundTrackStyle = computed(() => ({
 function getBackgroundSlotStyle(layout: ShowcaseStripItemLayout) {
   return {
     width: `${layout.frameWidthPx}px`,
+    height: `${layout.holeHeightPx}px`,
+  }
+}
+
+function getBackgroundImageStyle(layout: ShowcaseStripItemLayout) {
+  return {
     height: `${layout.frameHeightPx}px`,
+    transform: `translate3d(0, ${layout.backgroundImageOffsetYPx}px, 0)`,
   }
 }
 
@@ -137,6 +144,7 @@ defineExpose({
                 :src="item.preview_url"
                 alt=""
                 draggable="false"
+                :style="getBackgroundImageStyle(layouts[index])"
               >
             </div>
           </div>

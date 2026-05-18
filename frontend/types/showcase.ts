@@ -46,6 +46,7 @@ export interface ShowcaseStripItemLayout {
   centerPx: number
   frameWidthPx: number
   frameHeightPx: number
+  backgroundImageOffsetYPx: number
   matteWidthPx: number
   matteHeightPx: number
   holeWidthPx: number

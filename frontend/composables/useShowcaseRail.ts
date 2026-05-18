@@ -13,6 +13,8 @@ const DEFAULT_VIEWPORT_HEIGHT_PX = 900
 const DEFAULT_LOOP_SPAN_PX = 960
 const DEFAULT_MASK_SPEED_MULTIPLIER = 1.5
 const SHOWCASE_GLOBAL_SCALE = 1.5
+const SHOWCASE_MAX_UP_OFFSET_PX = 72
+const SHOWCASE_MAX_DOWN_OFFSET_PX = 72
 const DEFAULT_CONFIG = {
   loop: true,
   wheelMultiplier: 1,
@@ -95,12 +97,14 @@ export function computeStripLayouts(photos: ShowcasePhotoItem[], viewportHeightP
   const frameWidthPx = scaleByShowcaseFactor(baseFrameWidthPx)
   const mattePadXPx = scaleByShowcaseFactor(baseMattePadXPx)
   const mattePadYPx = scaleByShowcaseFactor(baseMattePadYPx)
+  const waveEnvelopeHeightPx = frameHeightPx + SHOWCASE_MAX_UP_OFFSET_PX + SHOWCASE_MAX_DOWN_OFFSET_PX
 
   let cursorPx = 0
   const layouts: ShowcaseStripItemLayout[] = photos.map((_, index) => {
     const startPx = cursorPx
     const centerPx = startPx + frameWidthPx / 2
     cursorPx += frameWidthPx
+    const backgroundImageOffsetYPx = index % 2 === 0 ? 0 : SHOWCASE_MAX_UP_OFFSET_PX + SHOWCASE_MAX_DOWN_OFFSET_PX
 
     return {
       index,
@@ -108,18 +112,19 @@ export function computeStripLayouts(photos: ShowcasePhotoItem[], viewportHeightP
       centerPx,
       frameWidthPx,
       frameHeightPx,
+      backgroundImageOffsetYPx,
       matteWidthPx: frameWidthPx + mattePadXPx * 2,
-      matteHeightPx: frameHeightPx + mattePadYPx * 2,
+      matteHeightPx: waveEnvelopeHeightPx + mattePadYPx * 2,
       holeWidthPx: frameWidthPx,
-      holeHeightPx: frameHeightPx,
+      holeHeightPx: waveEnvelopeHeightPx,
     }
   })
 
   return {
     layouts,
     loopSpanPx: cursorPx > 0 ? cursorPx : DEFAULT_LOOP_SPAN_PX,
-    imageHeightPx: frameHeightPx,
-    matteHeightPx: frameHeightPx + mattePadYPx * 2,
+    imageHeightPx: waveEnvelopeHeightPx,
+    matteHeightPx: waveEnvelopeHeightPx + mattePadYPx * 2,
     averagePitchPx: layouts.length ? cursorPx / layouts.length : 0,
   }
 }

@@ -23,7 +23,7 @@ function formatArchiveTimeLabel(value: string): string {
 
 const shellStyle = computed(() => ({
   '--slot-width': `${props.layout.frameWidthPx}px`,
-  '--slot-height': `${props.layout.frameHeightPx}px`,
+  '--slot-height': `${props.layout.holeHeightPx}px`,
   '--matte-width': `${props.layout.matteWidthPx}px`,
   '--matte-height': `${props.layout.matteHeightPx}px`,
   '--hole-width': `${props.layout.holeWidthPx}px`,

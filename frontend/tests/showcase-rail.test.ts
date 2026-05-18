@@ -329,12 +329,34 @@ describe('useShowcaseRail', () => {
     const metrics = computeStripLayouts([makeShowcasePhotoItem('photo-1')], 900)
 
     expect(metrics.layouts[0]).toMatchObject({
-      frameWidthPx: 470,
-      frameHeightPx: 367,
-      matteWidthPx: 588,
-      matteHeightPx: 499,
-      holeWidthPx: 470,
-      holeHeightPx: 367,
+      frameWidthPx: 588,
+      frameHeightPx: 459,
+      backgroundImageOffsetYPx: 0,
+      matteWidthPx: 734,
+      matteHeightPx: 769,
+      holeWidthPx: 588,
+      holeHeightPx: 603,
+    })
+  })
+
+  it('uses the global max-up and max-down offsets to create an alternating wave while keeping a uniform hole height', () => {
+    const metrics = computeStripLayouts([
+      makeShowcasePhotoItem('photo-1'),
+      makeShowcasePhotoItem('photo-2'),
+      makeShowcasePhotoItem('photo-3'),
+    ], 900)
+
+    expect(metrics.layouts[0]).toMatchObject({
+      backgroundImageOffsetYPx: 0,
+      holeHeightPx: 603,
+    })
+    expect(metrics.layouts[1]).toMatchObject({
+      backgroundImageOffsetYPx: 144,
+      holeHeightPx: 603,
+    })
+    expect(metrics.layouts[2]).toMatchObject({
+      backgroundImageOffsetYPx: 0,
+      holeHeightPx: 603,
     })
   })
 
@@ -395,7 +417,8 @@ describe('useShowcaseRail', () => {
       loopSpanPx,
       timestamp: Date.now(),
     })
-    rail.onWheel({ deltaY: 240 } as WheelEvent)
+    const wrapDeltaPx = rail.layouts.value[0]?.frameWidthPx ?? 240
+    rail.onWheel({ deltaY: wrapDeltaPx } as WheelEvent)
     vi.advanceTimersByTime(1500)
 
     expect(rail.activeIndex.value).toBe(0)
@@ -442,7 +465,8 @@ describe('useShowcaseRail', () => {
       loopSpanPx,
       timestamp: Date.now(),
     })
-    rail.onWheel({ deltaY: 240 } as WheelEvent)
+    const wrapDeltaPx = rail.layouts.value[0]?.frameWidthPx ?? 240
+    rail.onWheel({ deltaY: wrapDeltaPx } as WheelEvent)
     vi.advanceTimersByTime(1500)
 
     expect(rail.activeIndex.value).toBe(0)
