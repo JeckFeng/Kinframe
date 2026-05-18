@@ -81,4 +81,37 @@ describe('ShowcaseStage', () => {
     await nextTick()
     expect(wrapper.get('[data-testid="showcase-stage"]').attributes('data-rail-state')).toBe('idle')
   })
+
+  it('switches the showcase cursor from idle to image hover mode inside the stage', async () => {
+    const wrapper = mount(ShowcaseStage, {
+      props: {
+        photos: [makeShowcasePhotoItem('photo-1')],
+        activeCategory: 'life',
+      },
+    })
+
+    const stage = wrapper.get('[data-testid="showcase-stage"]')
+    const cursor = wrapper.get('[data-testid="showcase-cursor"]')
+
+    await stage.trigger('pointerenter', { clientX: 120, clientY: 160, pointerType: 'mouse' })
+    await stage.trigger('pointermove', { clientX: 120, clientY: 160, pointerType: 'mouse' })
+
+    expect(cursor.attributes('data-visible')).toBe('true')
+    expect(cursor.attributes('data-hover-state')).toBe('idle')
+    expect(cursor.attributes('style')).toContain('translate3d(120px, 160px, 0)')
+
+    await wrapper.get('.showcase-slide-image').trigger('pointermove', {
+      clientX: 144,
+      clientY: 184,
+      pointerType: 'mouse',
+    })
+
+    expect(cursor.attributes('data-hover-state')).toBe('image')
+    expect(cursor.attributes('style')).toContain('translate3d(144px, 184px, 0)')
+
+    await stage.trigger('pointerleave')
+
+    expect(cursor.attributes('data-visible')).toBe('false')
+    expect(cursor.attributes('data-hover-state')).toBe('idle')
+  })
 })

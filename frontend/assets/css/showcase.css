@@ -2,6 +2,12 @@
   --showcase-bg: #000000;
   --showcase-text: rgba(255, 255, 255, 0.94);
   --showcase-text-muted: rgba(255, 255, 255, 0.58);
+  --showcase-cursor-idle-radius: 22px;
+  --showcase-cursor-image-radius: 5px;
+  --showcase-cursor-idle-rgb: 255, 48, 48;
+  --showcase-cursor-image-rgb: 255, 48, 48;
+  --showcase-cursor-idle-opacity: 0.58;
+  --showcase-cursor-image-opacity: 0.86;
   --showcase-slide-tilt-desktop: 12deg;
   --showcase-slide-tilt-tablet: 10deg;
   --showcase-slide-tilt-mobile: 7deg;
@@ -23,6 +29,13 @@
   background: var(--showcase-bg);
   color: var(--showcase-text);
   isolation: isolate;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .showcase-stage,
+  .showcase-stage * {
+    cursor: none;
+  }
 }
 
 .showcase-stage-viewport,
@@ -121,8 +134,38 @@
   object-fit: cover;
   object-position: center center;
   user-select: none;
-  pointer-events: none;
+  pointer-events: auto;
   filter: brightness(0.96) contrast(1.02);
+}
+
+.showcase-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  width: calc(var(--showcase-cursor-idle-radius) * 2);
+  height: calc(var(--showcase-cursor-idle-radius) * 2);
+  border-radius: 999px;
+  background: rgba(var(--showcase-cursor-idle-rgb), var(--showcase-cursor-idle-opacity));
+  opacity: var(--showcase-cursor-idle-opacity);
+  pointer-events: none;
+  will-change: transform, width, height, opacity, background-color;
+  transition:
+    width 180ms var(--showcase-ease),
+    height 180ms var(--showcase-ease),
+    opacity 180ms var(--showcase-ease),
+    background-color 180ms var(--showcase-ease);
+}
+
+.showcase-cursor[data-hover-state="image"] {
+  width: calc(var(--showcase-cursor-image-radius) * 2);
+  height: calc(var(--showcase-cursor-image-radius) * 2);
+  background: rgba(var(--showcase-cursor-image-rgb), var(--showcase-cursor-image-opacity));
+  opacity: var(--showcase-cursor-image-opacity);
+}
+
+.showcase-cursor[data-visible="false"] {
+  opacity: 0 !important;
 }
 
 .showcase-mask-slot-shell {
@@ -217,7 +260,7 @@
   z-index: 4;
   width: min(78%, 22rem);
   padding: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(238, 6, 6, 0.8);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
   transform: translate3d(var(--caption-translate-x, 0px), 0, 0);
   transition: transform 320ms var(--showcase-ease), opacity 320ms var(--showcase-ease);
@@ -227,7 +270,7 @@
   display: grid;
   gap: 0.45rem;
   padding: 0.95rem 1.1rem 0.95rem;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(213, 12, 12, 0.8);
 }
 
 .showcase-mask-location,

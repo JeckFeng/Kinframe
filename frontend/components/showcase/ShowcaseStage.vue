@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { ShowcaseStageExpose, ShowcaseStageProps } from '~/types/showcase'
 import ShowcaseProgressStrip from './ShowcaseProgressStrip.vue'
 import ShowcaseRail from './ShowcaseRail.vue'
@@ -19,6 +19,29 @@ const emit = defineEmits<{
 const railRef = ref<InstanceType<typeof ShowcaseRail> | null>(null)
 const internalActiveIndex = ref(props.initialSnapshot?.activeIndex ?? 0)
 const railState = ref<import('~/types/showcase').ShowcaseRailInteractionState>('idle')
+const cursorVisible = ref(false)
+const cursorX = ref(0)
+const cursorY = ref(0)
+const cursorMode = ref<'idle' | 'image'>('idle')
+
+const cursorStyle = computed(() => ({
+  transform: `translate3d(${cursorX.value}px, ${cursorY.value}px, 0) translate3d(-50%, -50%, 0)`,
+}))
+
+function isFinePointer(event: PointerEvent) {
+  return !event.pointerType || event.pointerType === 'mouse' || event.pointerType === 'pen'
+}
+
+function resolveCursorMode(target: EventTarget | null): 'idle' | 'image' {
+  return target instanceof Element && target.closest('.showcase-slide-image') ? 'image' : 'idle'
+}
+
+function updateCursor(event: PointerEvent) {
+  cursorVisible.value = true
+  cursorX.value = event.clientX
+  cursorY.value = event.clientY
+  cursorMode.value = resolveCursorMode(event.target)
+}
 
 function handleActiveChange(payload: import('~/types/showcase').ShowcaseRailActiveChangePayload) {
   internalActiveIndex.value = payload.activeIndex
@@ -65,6 +88,31 @@ function resume() {
   railState.value = 'idle'
 }
 
+function handlePointerEnter(event: PointerEvent) {
+  if (!isFinePointer(event)) {
+    cursorVisible.value = false
+    cursorMode.value = 'idle'
+    return
+  }
+
+  updateCursor(event)
+}
+
+function handlePointerMove(event: PointerEvent) {
+  if (!isFinePointer(event)) {
+    cursorVisible.value = false
+    cursorMode.value = 'idle'
+    return
+  }
+
+  updateCursor(event)
+}
+
+function handlePointerLeave() {
+  cursorVisible.value = false
+  cursorMode.value = 'idle'
+}
+
 defineExpose<ShowcaseStageExpose>({
   jumpToIndex,
   jumpBy,
@@ -81,6 +129,10 @@ defineExpose<ShowcaseStageExpose>({
     data-testid="showcase-stage"
     :data-category="props.activeCategory"
     :data-rail-state="railState"
+    @pointerenter="handlePointerEnter"
+    @pointerover="handlePointerMove"
+    @pointermove="handlePointerMove"
+    @pointerleave="handlePointerLeave"
   >
     <div class="showcase-stage-viewport">
       <ShowcaseRail
@@ -105,5 +157,14 @@ defineExpose<ShowcaseStageExpose>({
         @jump="jumpToIndex($event.index, $event.source)"
       />
     </footer>
+
+    <div
+      aria-hidden="true"
+      class="showcase-cursor"
+      data-testid="showcase-cursor"
+      :data-visible="cursorVisible ? 'true' : 'false'"
+      :data-hover-state="cursorMode"
+      :style="cursorStyle"
+    />
   </section>
 </template>
