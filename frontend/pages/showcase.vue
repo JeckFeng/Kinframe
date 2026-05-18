@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="relative min-h-screen overflow-hidden bg-black text-white">
+  <section class="showcase-page-shell relative min-h-screen overflow-hidden bg-black text-white">
     <div
       class="group/menu fixed inset-x-0 top-0 z-40"
       :class="isMobile ? 'cursor-pointer' : ''"
@@ -351,7 +351,7 @@ onBeforeUnmount(() => {
           v-if="orderedCategories.current"
           type="button"
           class="focus-ring -my-1 transition-colors duration-300"
-          style="writing-mode: vertical-rl; text-orientation: upright; color: rgba(255,255,255,0.92); font-size: clamp(22px, 2.2vw, 34px); font-weight: 500; letter-spacing: 0.18em; font-family: 'Noto Serif SC', 'Source Han Serif SC', 'STSong', 'Songti SC', 'Noto Serif CJK SC', serif;"
+          style="writing-mode: vertical-rl; text-orientation: upright; color: rgba(255,255,255,0.92); font-size: clamp(22px, 2.2vw, 34px); font-weight: 500; letter-spacing: 0.18em; font-family: var(--showcase-font-family);"
           @click="showCategories"
         >
           {{ showcaseDisplayName(orderedCategories.current.name) }}

@@ -2,6 +2,7 @@
   --showcase-bg: #000000;
   --showcase-text: rgba(255, 255, 255, 0.94);
   --showcase-text-muted: rgba(255, 255, 255, 0.58);
+  --showcase-font-family: var(--app-font-family);
   --showcase-cursor-idle-radius: 22px;
   --showcase-cursor-image-radius: 5px;
   --showcase-cursor-idle-rgb: 255, 48, 48;
@@ -15,16 +16,16 @@
   --showcase-progress-thumb-height: 48px;
   --showcase-progress-thumb-opacity: 0.4;
   --showcase-progress-thumb-active-scale: 1.08;
-  --showcase-info-time-font-family-desktop: inherit;
+  --showcase-info-time-font-family-desktop: var(--showcase-font-family);
   --showcase-info-time-font-style-desktop: normal;
-  --showcase-info-time-font-size-desktop: 12px;
+  --showcase-info-time-font-size-desktop: 18px;
   --showcase-info-time-font-weight-desktop: 500;
   --showcase-info-time-letter-spacing-desktop: 0.14em;
   --showcase-info-time-line-height-desktop: 1.2;
   --showcase-info-time-text-transform-desktop: uppercase;
   --showcase-info-time-color-desktop: rgba(255, 255, 255, 0.96);
   --showcase-info-time-text-shadow-desktop: 0 1px 10px rgba(0, 0, 0, 0.42);
-  --showcase-info-time-font-family-mobile: inherit;
+  --showcase-info-time-font-family-mobile: var(--showcase-font-family);
   --showcase-info-time-font-style-mobile: normal;
   --showcase-info-time-font-size-mobile: 11px;
   --showcase-info-time-font-weight-mobile: 500;
@@ -44,16 +45,17 @@
   --showcase-info-time-text-shadow: var(--showcase-info-time-text-shadow-desktop);
   --showcase-info-time-outset-top: calc(var(--showcase-info-time-font-size) * 1.5);
   --showcase-info-time-outset-right: calc(var(--showcase-info-time-font-size) * 1.15);
-  --showcase-info-location-font-family-desktop: inherit;
+  --showcase-info-time-inset-x: 2px;
+  --showcase-info-location-font-family-desktop: var(--showcase-font-family);
   --showcase-info-location-font-style-desktop: normal;
-  --showcase-info-location-font-size-desktop: 12px;
+  --showcase-info-location-font-size-desktop: 20px;
   --showcase-info-location-font-weight-desktop: 500;
   --showcase-info-location-letter-spacing-desktop: 0.12em;
   --showcase-info-location-line-height-desktop: 1.25;
   --showcase-info-location-text-transform-desktop: uppercase;
   --showcase-info-location-color-desktop: rgba(255, 255, 255, 0.58);
   --showcase-info-location-text-shadow-desktop: 0 1px 10px rgba(0, 0, 0, 0.42);
-  --showcase-info-location-font-family-mobile: inherit;
+  --showcase-info-location-font-family-mobile: var(--showcase-font-family);
   --showcase-info-location-font-style-mobile: normal;
   --showcase-info-location-font-size-mobile: 11px;
   --showcase-info-location-font-weight-mobile: 500;
@@ -73,6 +75,7 @@
   --showcase-info-location-text-shadow: var(--showcase-info-location-text-shadow-desktop);
   --showcase-info-location-outset-left: calc(var(--showcase-info-location-font-size) * 1.15);
   --showcase-info-location-outset-bottom: calc(var(--showcase-info-location-font-size) * 1.4);
+  --showcase-info-location-inset-x: 2px;
   --showcase-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --showcase-slide-tilt: var(--showcase-slide-tilt-desktop);
 }
@@ -83,7 +86,12 @@
   min-height: 100vh;
   background: var(--showcase-bg);
   color: var(--showcase-text);
+  font-family: var(--showcase-font-family);
   isolation: isolate;
+}
+
+.showcase-page-shell {
+  font-family: var(--showcase-font-family);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -345,7 +353,7 @@
 
 .showcase-info-time {
   position: absolute;
-  right: 0;
+  right: calc(var(--showcase-info-time-outset-right) - var(--showcase-info-time-inset-x));
   top: 0;
   z-index: 2;
   margin: 0;
@@ -365,7 +373,7 @@
 
 .showcase-info-location {
   position: absolute;
-  left: 0;
+  left: calc(var(--showcase-info-location-outset-left) - var(--showcase-info-location-inset-x));
   bottom: 0;
   z-index: 2;
   max-width: min(calc(var(--info-frame-width) + var(--showcase-info-location-outset-left)), 22rem);

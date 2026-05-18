@@ -18,6 +18,13 @@
 - 代码位置：`frontend/composables/useShowcaseRail.ts`
 - 作用范围：背景层图片会在统一高度包络里交替上下错落；前景镂空窗格和黑色遮罩高度也会一起抬高到能包住最高图和最低图。
 
+字体资源参数：
+
+- `--app-font-family = 'KinFrameGlobal', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif`
+- `@font-face` 代码位置：`frontend/assets/css/main.css`
+- 字体文件位置：`frontend/public/fonts/Charm-Regular.ttf`、`frontend/public/fonts/Charm-Bold.ttf`、`frontend/public/fonts/LXGWWenKai-Regular.ttf`、`frontend/public/fonts/LXGWWenKai-Medium.ttf`
+- 作用范围：全站页面统一使用这套复合字体族；英文和数字走 `Charm`，中文走 `LXGW WenKai`。`showcase` 的 `--showcase-font-family` 现在也只是继承这个全局变量。
+
 | # | 参数 | 当前值 / 表达式 | 代码位置 | 调整说明 |
 |---|---|---|---|---|
 | 1 | 背景层图片大小尺寸参数 | `frameHeightPx = scale( clamp(viewportHeight * 0.34, 220, 380) )`；`frameWidthPx = scale( clamp(baseFrameHeightPx * 1.28, 280, 520) )` | `frontend/composables/useShowcaseRail.ts:89-99` | 这是背景层每张图的基础尺寸来源。当前还会再乘上全局比例 `SHOWCASE_GLOBAL_SCALE = 1.5`。 |
