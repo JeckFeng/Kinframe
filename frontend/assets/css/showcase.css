@@ -96,7 +96,6 @@
   align-items: center;
   will-change: transform;
   transform-origin: 0 0;
-  transition: transform 140ms linear;
 }
 
 .showcase-slide-mask {

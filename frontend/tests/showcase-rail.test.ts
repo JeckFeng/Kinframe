@@ -67,7 +67,7 @@ describe('useShowcaseRail', () => {
 
     const rail = useShowcaseRail({
       photos,
-      reducedMotion: ref(false),
+      reducedMotion: ref(true),
       initialSnapshot: ref(null),
       onActiveChange,
       onSettle,
@@ -211,7 +211,15 @@ describe('useShowcaseRail', () => {
     expect(onSettle).toHaveBeenCalled()
   })
 
-  it('wraps to the first logical photo when jumpBy advances beyond the final slot in loop mode', () => {
+  it('wraps to the first logical photo on the next physical copy when jumpBy advances beyond the final slot in loop mode', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      return setTimeout(() => callback(Date.now()), 16) as unknown as number
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      clearTimeout(id)
+    })
+
     const onActiveChange = vi.fn()
     const photos = ref([
       makeShowcasePhotoItem('photo-1'),
@@ -226,12 +234,27 @@ describe('useShowcaseRail', () => {
       onActiveChange,
     })
 
-    rail.jumpToIndex(2, 'keyboard')
+    const loopSpanPx = rail.getSnapshot().loopSpanPx
+    const lastLayout = rail.layouts.value[2]
+    expect(lastLayout).toBeDefined()
+
+    rail.restoreSnapshot({
+      currentX: lastLayout?.centerPx ?? 0,
+      targetX: lastLayout?.centerPx ?? 0,
+      activeIndex: 2,
+      activePhotoId: 'photo-3',
+      itemPitchPx: rail.getSnapshot().itemPitchPx,
+      loopSpanPx,
+      timestamp: Date.now(),
+    })
     rail.jumpBy(1, 'keyboard')
+    expect(rail.targetX.value).toBeGreaterThan(loopSpanPx)
+    vi.advanceTimersByTime(1500)
 
     expect(rail.activeIndex.value).toBe(0)
     expect(rail.getSnapshot().activePhotoId).toBe('photo-1')
-    expect(onActiveChange).toHaveBeenLastCalledWith(
+    expect(rail.currentX.value).toBeGreaterThan(loopSpanPx)
+    expect(onActiveChange).toHaveBeenCalledWith(
       expect.objectContaining({
         activeIndex: 0,
         activePhotoId: 'photo-1',
@@ -239,6 +262,50 @@ describe('useShowcaseRail', () => {
         source: 'keyboard',
       }),
     )
+  })
+
+  it('continues from the in-flight target when jumpBy is triggered repeatedly before the previous animation settles', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      return setTimeout(() => callback(Date.now()), 16) as unknown as number
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      clearTimeout(id)
+    })
+
+    const photos = ref([
+      makeShowcasePhotoItem('photo-1'),
+      makeShowcasePhotoItem('photo-2'),
+      makeShowcasePhotoItem('photo-3'),
+    ])
+
+    const rail = useShowcaseRail({
+      photos,
+      reducedMotion: ref(false),
+      initialSnapshot: ref(null),
+    })
+
+    const loopSpanPx = rail.getSnapshot().loopSpanPx
+    const lastLayout = rail.layouts.value[2]
+    expect(lastLayout).toBeDefined()
+
+    rail.restoreSnapshot({
+      currentX: lastLayout?.centerPx ?? 0,
+      targetX: lastLayout?.centerPx ?? 0,
+      activeIndex: 2,
+      activePhotoId: 'photo-3',
+      itemPitchPx: rail.getSnapshot().itemPitchPx,
+      loopSpanPx,
+      timestamp: Date.now(),
+    })
+
+    rail.jumpBy(1, 'keyboard')
+    rail.jumpBy(1, 'keyboard')
+    vi.advanceTimersByTime(1500)
+
+    expect(rail.activeIndex.value).toBe(1)
+    expect(rail.getSnapshot().activePhotoId).toBe('photo-2')
+    expect(rail.currentX.value).toBeGreaterThan(loopSpanPx)
   })
 
   it('builds seamless strip layouts from the source photo aspect ratios', () => {
@@ -303,7 +370,18 @@ describe('useShowcaseRail', () => {
     })
 
     const loopSpanPx = rail.getSnapshot().loopSpanPx
-    rail.jumpToIndex(2, 'keyboard')
+    const lastLayout = rail.layouts.value[2]
+    expect(lastLayout).toBeDefined()
+
+    rail.restoreSnapshot({
+      currentX: lastLayout?.centerPx ?? 0,
+      targetX: lastLayout?.centerPx ?? 0,
+      activeIndex: 2,
+      activePhotoId: 'photo-3',
+      itemPitchPx: rail.getSnapshot().itemPitchPx,
+      loopSpanPx,
+      timestamp: Date.now(),
+    })
     rail.onWheel({ deltaY: 240 } as WheelEvent)
     vi.advanceTimersByTime(1500)
 
@@ -339,7 +417,18 @@ describe('useShowcaseRail', () => {
     })
 
     const loopSpanPx = rail.getSnapshot().loopSpanPx
-    rail.jumpToIndex(2, 'keyboard')
+    const lastLayout = rail.layouts.value[2]
+    expect(lastLayout).toBeDefined()
+
+    rail.restoreSnapshot({
+      currentX: lastLayout?.centerPx ?? 0,
+      targetX: lastLayout?.centerPx ?? 0,
+      activeIndex: 2,
+      activePhotoId: 'photo-3',
+      itemPitchPx: rail.getSnapshot().itemPitchPx,
+      loopSpanPx,
+      timestamp: Date.now(),
+    })
     rail.onWheel({ deltaY: 240 } as WheelEvent)
     vi.advanceTimersByTime(1500)
 

@@ -242,6 +242,50 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     return normalizeLoopX(targetX.value, span)
   }
 
+  function getAnchorX(): number {
+    return Number.isFinite(targetX.value) ? targetX.value : currentX.value
+  }
+
+  function getAnchorIndex(): number {
+    return computeActiveIndex(
+      layouts.value,
+      getAnchorX(),
+      config.activeBiasPx,
+      getLoopSpanPx(),
+    )
+  }
+
+  function resolveLoopedCenterPx(
+    index: number,
+    anchorX: number,
+    directionHint: -1 | 0 | 1,
+  ): number | null {
+    const targetLayout = layouts.value[index]
+    if (!targetLayout) return null
+
+    if (!config.loop) {
+      return targetLayout.centerPx
+    }
+
+    const span = getLoopSpanPx()
+    if (span <= 0) {
+      return targetLayout.centerPx
+    }
+
+    const nearestLoopIndex = Math.round((anchorX - targetLayout.centerPx) / span)
+    let resolvedCenterPx = targetLayout.centerPx + nearestLoopIndex * span
+
+    if (directionHint > 0 && resolvedCenterPx <= anchorX) {
+      resolvedCenterPx += span
+    }
+
+    if (directionHint < 0 && resolvedCenterPx >= anchorX) {
+      resolvedCenterPx -= span
+    }
+
+    return resolvedCenterPx
+  }
+
   function rebaseLoopPositions() {
     if (!config.loop) return
 
@@ -453,6 +497,24 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     }
   }
 
+  function moveToResolvedCenter(
+    resolvedCenterPx: number,
+    nextActiveIndex: number,
+    source: ShowcaseRailInteractionSource,
+  ) {
+    targetX.value = resolvedCenterPx
+
+    if (options.reducedMotion.value) {
+      currentX.value = resolvedCenterPx
+      activeIndex.value = nextActiveIndex
+      settle(source)
+      return
+    }
+
+    setInteractionState('driving', source)
+    startTick(source)
+  }
+
   function jumpToIndex(index: number, source: ShowcaseRailInteractionSource = 'programmatic') {
     const safeLength = layouts.value.length
     if (!safeLength) {
@@ -466,19 +528,26 @@ export function useShowcaseRail(options: UseShowcaseRailOptions): UseShowcaseRai
     const normalizedIndex = config.loop
       ? ((index % safeLength) + safeLength) % safeLength
       : Math.min(Math.max(index, 0), safeLength - 1)
-    const targetLayout = layouts.value[normalizedIndex]
-    if (!targetLayout) return
+    const directionHint = computeDirection(getAnchorIndex(), normalizedIndex, safeLength)
+    const resolvedCenterPx = resolveLoopedCenterPx(normalizedIndex, getAnchorX(), directionHint)
+    if (resolvedCenterPx === null) return
 
-    activeIndex.value = normalizedIndex
-    currentX.value = targetLayout.centerPx
-    targetX.value = currentX.value
-    syncCardStates(source)
-    setInteractionState('idle', source)
-    options.onSettle?.(getSnapshot())
+    moveToResolvedCenter(resolvedCenterPx, normalizedIndex, source)
   }
 
   function jumpBy(step: number, source: ShowcaseRailInteractionSource = 'programmatic') {
-    jumpToIndex(activeIndex.value + step, source)
+    const safeLength = layouts.value.length
+    if (!safeLength) return
+
+    const anchorIndex = getAnchorIndex()
+    const normalizedIndex = config.loop
+      ? ((anchorIndex + step) % safeLength + safeLength) % safeLength
+      : Math.min(Math.max(anchorIndex + step, 0), safeLength - 1)
+    const directionHint = step === 0 ? 0 : step > 0 ? 1 : -1
+    const resolvedCenterPx = resolveLoopedCenterPx(normalizedIndex, getAnchorX(), directionHint)
+    if (resolvedCenterPx === null) return
+
+    moveToResolvedCenter(resolvedCenterPx, normalizedIndex, source)
   }
 
   function restoreSnapshot(snapshot: ShowcaseRailSnapshot | null | undefined) {

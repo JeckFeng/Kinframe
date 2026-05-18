@@ -77,6 +77,7 @@ describe('ShowcaseRail component', () => {
           makeShowcasePhotoItem('photo-2'),
           makeShowcasePhotoItem('photo-3'),
         ],
+        reducedMotion: true,
       },
     })
 
